@@ -1,0 +1,9 @@
+#copy files to /data/isminib/scRnaExplorer dir
+#from within /data/isminib/scRNAExplorer
+sudo cp -R /home/isminib/scrnaExplorer_site/site_data/ ./site_data/
+
+#build the docker image
+docker build -t scranexplorer:09102023
+
+#run the docker image
+docker run scrnaexplorer:09102023
