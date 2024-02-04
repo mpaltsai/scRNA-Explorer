@@ -37,6 +37,7 @@ library(shinycssloaders)
 source("tab_0.R", local=TRUE)
 source("tab_1.R", local=TRUE)
 source("tab_2dev.R", local=TRUE)
+source("tab_2_cells.R", local=TRUE)
 source("tab_3.R", local=TRUE)
 source("tab_4.R", local=TRUE)
 
@@ -56,6 +57,7 @@ ui <- fluidPage(
     tab0,
     tab1,
     tab2,
+    tab2_cell_clusters,
     tab3,
     tab4,
     #tabPanel("Gene correlation across cell types"),

@@ -79,11 +79,12 @@ tab1<-     tabPanel("Data input/preprocessing",
                         
                         #save data as rds object
                         helpText("Now we'll save data with metadata in a Rds object"),
-                        textInput(inputId="dataName", "Please provide a name for your dataset", 
-                                  value = "Enter a name..."),
-                        helpText("You can download the Rds object"),
-                        actionButton("initDownload", 'Save Rds object'),
-                        span(textOutput("dataNameValidation")%>% withSpinner(), style = "color:dodgerblue"),
+                        #textInput(inputId="dataName", "Please provide a name for your dataset", 
+                        #          value = "Enter a name..."),
+                        helpText("You can download the Rds object (optional but helpful)"),
+                        #actionButton("initDownload", 'Save Rds object'),
+                        downloadButton("initDownload", 'Save Rds object')
+                        #span(textOutput("dataNameValidation")%>% withSpinner(), style = "color:dodgerblue"),
                         
                         
                         

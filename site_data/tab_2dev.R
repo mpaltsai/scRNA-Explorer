@@ -13,13 +13,15 @@ tab2 <-tabPanel("Quality Control Plots",
     ),
     
     column(4,
-           #helpText("Pre-filtering"),
+           wellPanel(
+           helpText(strong("Pre-filtering"))
            #textOutput("NBinSample")
-    ),
+    )),
     column(4,
-           #helpText("Post-filtering")
+           wellPanel(
+             helpText(strong("Post-filtering"))
            )
-  ),
+  )),
 
   #UMIs per cell
   fluidRow(
@@ -158,7 +160,7 @@ tab2 <-tabPanel("Quality Control Plots",
     column(4,
            wellPanel(
              helpText("Visualize the distribution of mitochondrial gene expression detected per cell"),
-             actionButton("makemitoRatio", 'Plot mitoRatio per cell'),
+             actionButton("makemitoRatio", 'Plot mitochondrial ratio per cell'),
              conditionalPanel(
                condition="input.makemitoRatio>0",
                helpText("You can slide the vertical lines on the plot by changing the values below"),
@@ -184,7 +186,7 @@ tab2 <-tabPanel("Quality Control Plots",
     column(4,
            wellPanel(
              helpText("Visualize the distribution of hemoglobins expression detected per cell"),
-             actionButton("makerbcRatio", 'Plot rbcRatio per cell'),
+             actionButton("makerbcRatio", 'Plot hemoglobins ratio per cell'),
              conditionalPanel(
                condition="input.makerbcRatio>0",
                helpText("You can slide the vertical lines on the plot by changing the values below"),
@@ -260,13 +262,13 @@ tab2 <-tabPanel("Quality Control Plots",
            )),
     column(4,
            wellPanel(
-             actionButton("zoomhighExprPlot", "Zoom"),
+             actionButton("zoomhighExprPlot", "Zoom in"),
              plotOutput("highExprPlot")%>% withSpinner()
              
            )),
     column(4,
            wellPanel(
-             actionButton("zoomhighExprPlotFiltered", "Zoom"),
+             actionButton("zoomhighExprPlotFiltered", "Zoom in"),
              plotOutput("highExprPlotFiltered")%>% withSpinner()
            ))
   ),
@@ -314,12 +316,13 @@ tab2 <-tabPanel("Quality Control Plots",
              span(textOutput("QCDataFilt") %>% withSpinner(), style = "color:dodgerblue"),
              
              #save data as rds object
-             helpText(strong("You can save data with metadata in a Rds object")),
-             textInput(inputId="dataNameQC", "Please provide a name for your dataset", 
-                       value = "Enter a name..."),
+             helpText(strong("You can save filtered data with metadata in a Rds object")),
+             #textInput(inputId="dataNameQC", "Please provide a name for your dataset", 
+                    #   value = "Enter a name..."),
              helpText(strong("You can download the Rds object")),
-             actionButton("QCDownload", 'Save Rds object'),
-             span(textOutput("dataNameValidationQC")%>% withSpinner(), style = "color:dodgerblue"),
+             downloadButton("QCDownload", 'Save Rds object')
+             #actionButton("QCDownload", 'Save Rds object'),
+             #span(textOutput("dataNameValidationQC")%>% withSpinner(), style = "color:dodgerblue"),
              
            ),
            wellPanel(

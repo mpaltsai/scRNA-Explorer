@@ -14,7 +14,7 @@ library(dplyr)
 library(utils)
 
 
-options(shiny.maxRequestSize=5000*1024^2)  #max upload file size 5GB
+options(shiny.maxRequestSize=8000*1024^2)  #max upload file size 5GB
 
 
 #load functions
@@ -44,7 +44,7 @@ function(input, output, session){
         inputDir <<- FALSE
         paste0("Your input to the following QC pipeline is the test dataset.","\n",
                "You'll have to define origin organism and features annotation type below.", "\n",
-               "This dataset comes from Mus mussculus and genes are annotated as gene names.")
+               "This dataset comes from Mus musculus and genes are annotated as gene names.")
       }else if(input$dir== "Enter directory path..." & all(is.null(c(input$csvFile, input$rdsFile)))){
         "Please provide an input (file or directory)"
       }else if(input$typeData == 1){
@@ -128,17 +128,27 @@ function(input, output, session){
   }) %>% bindEvent(input$initFiltering, ignoreInit = TRUE, ignoreNULL = TRUE)
   
   #save and download as rds
-  output$dataNameValidation <- reactive({
-    if(input$dataName=="Enter a name..."){
-      "Please provide a name"
-    }else if (input$dataName==""){
-      "Please provide a name"
-    }else{
-      # Create .RData object to load at any time
-      saveRDS(se, paste0("raw_se_", input$dataName, ".rds"))
-      "Saved"
+  #output$dataNameValidation <- reactive({
+    #if(input$dataName=="Enter a name..."){
+      #"Please provide a name"
+    #}else if (input$dataName==""){
+     # "Please provide a name"
+    #}else{
+      ## Create .RData object to load at any time
+      #saveRDS(se, paste0("raw_se_", input$dataName, ".rds"))
+      #"Saved"
+    #}
+  #}) %>% bindEvent(input$initDownload , ignoreInit = TRUE, ignoreNULL = TRUE)
+  
+  output$initDownload <- 
+    downloadHandler(
+    filename = function() {
+      paste0("raw_se_",  Sys.Date(), ".rds")
+    },
+    content = function(file) {
+      saveRDS(se, file)
     }
-  }) %>% bindEvent(input$initDownload , ignoreInit = TRUE, ignoreNULL = TRUE)
+  )
     
   ###### QC routine #####
   
@@ -332,17 +342,26 @@ function(input, output, session){
   })%>% bindEvent(input$QCFiltering, ignoreInit = TRUE, ignoreNULL = TRUE)
   
   #save and download as rds
-  output$dataNameValidationQC <- reactive({
-    if(input$dataNameQC=="Enter a name..."){
-      "Please provide a name"
-    }else if (input$dataNameQC==""){
-      "Please provide a name"
-    }else{
+  output$QCDownload <- 
+    downloadHandler(
+      filename = function() {
+        paste0("filtered_se_",  Sys.Date(), ".rds")
+      },
+      content = function(file) {
+        saveRDS(se[ ,keep_index], file)
+      }
+    )
+  #output$dataNameValidationQC <- reactive({
+   # if(input$dataNameQC=="Enter a name..."){
+   #   "Please provide a name"
+  #  }else if (input$dataNameQC==""){
+   #   "Please provide a name"
+   # }else{
       # Create .RData object to load at any time
-      saveRDS(se[ ,keep_index], paste0("se_filtered_", input$dataNameQC, ".rds"))
-      "Saved"
-    }
-  }) %>% bindEvent(input$QCDownload , ignoreInit = TRUE, ignoreNULL = TRUE)
+   #   saveRDS(se[ ,keep_index], paste0("se_filtered_", input$dataNameQC, ".rds"))
+   #   "Saved"
+   # }
+ # }) %>% bindEvent(input$QCDownload , ignoreInit = TRUE, ignoreNULL = TRUE)
   
   ##### Redraw Plots with filtered data #####
   #UMIs Plot
@@ -430,6 +449,193 @@ function(input, output, session){
       easyClose = TRUE
     ))
   })
+  
+  ##### Cell clustering #####
+  
+  #Normalize data
+  output$normalizeData <- reactive({
+    loaded.dataSO <- CreateSeuratObject(counts = se[ ,keep_index]@assays@data@listData$counts, project = "sample")
+    loaded.dataSO <- NormalizeData(loaded.dataSO)#, normalization.method = "LogNormalize", scale.factor = 10000)
+    #Identification of highly variable features (feature selection) *
+    loaded.dataSO <- FindVariableFeatures(loaded.dataSO, selection.method = "vst", nfeatures = 2000)
+    loaded.dataSO.combined.no.cluster <<-loaded.dataSO
+    "Data normalized"
+    
+  }) %>% bindEvent(input$normData , ignoreInit = TRUE, ignoreNULL = TRUE)
+  
+  #Dimensionality reduction and clustering
+  dim_red_data <- reactive({
+    loaded.dataSO.combined.no.cluster <<- ScaleData(loaded.dataSO.combined.no.cluster, verbose = FALSE)
+    loaded.dataSO.combined.no.cluster <<- RunPCA(loaded.dataSO.combined.no.cluster, npcs = 30, verbose = FALSE)
+    # t-SNE and Clustering
+    loaded.dataSO.combined.no.cluster <<- RunUMAP(loaded.dataSO.combined.no.cluster, reduction = "pca", dims = 1:20)
+    loaded.dataSO.combined.no.cluster <<- FindNeighbors(loaded.dataSO.combined.no.cluster, reduction = "pca", dims = 1:20)
+    #loaded.dataSO.combined.no.cluster <<- FindClusters(loaded.dataSO.combined.no.cluster, resolution  = 0.3)#was at 0.3
+    FindClusters(loaded.dataSO.combined.no.cluster, resolution  = 0.3)#was at 0.3
+  })
+  output$DimRedCluster <- reactive({
+    #loaded.dataSO.combined.no.cluster <<- ScaleData(loaded.dataSO.combined.no.cluster, verbose = FALSE)
+    #loaded.dataSO.combined.no.cluster <<- RunPCA(loaded.dataSO.combined.no.cluster, npcs = 30, verbose = FALSE)
+    # t-SNE and Clustering
+    #loaded.dataSO.combined.no.cluster <<- RunUMAP(loaded.dataSO.combined.no.cluster, reduction = "pca", dims = 1:20)
+    #loaded.dataSO.combined.no.cluster <<- FindNeighbors(loaded.dataSO.combined.no.cluster, reduction = "pca", dims = 1:20)
+    loaded.dataSO.combined.no.cluster <<- dim_red_data()
+    
+    "Clustering completed"
+    
+  }) %>% bindEvent(input$dimRedClust , ignoreInit = TRUE, ignoreNULL = TRUE)
+  
+  #Define cell type markers
+  data.markers <- reactive({
+    DefaultAssay(loaded.dataSO.combined.no.cluster) <<- "RNA"
+    FindAllMarkers(loaded.dataSO.combined.no.cluster, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+  })
+  
+  output$cellTypeMarkers <- reactive({
+    loaded.dataSO.combined.markers <<- data.markers()
+    "Marker definition completed"
+  })%>% bindEvent(input$cellMarkers , ignoreInit = TRUE, ignoreNULL = TRUE)
+  
+  #observeEvent(input$cellMarkers, {
+    
+    #withCallingHandlers({
+      #shinyjs::html("cellTypeMarkers", "")
+
+      #DefaultAssay(loaded.dataSO.combined.no.cluster) <<- "RNA"
+      #loaded.dataSO.combined.markers <<- FindAllMarkers(loaded.dataSO.combined.no.cluster, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+      
+      
+    #},
+   # message = function(m) {
+    #  shinyjs::html(id = "cellTypeMarkers", html = paste0(m$message, '<br>'), add = TRUE)
+    #})
+    #shinyjs::html(id = "cellTypeMarkers", html = paste0("Marker definition completed", '<br>'), add = TRUE)
+    
+  #})
+  
+  #define top markers
+  top_mark_def <- reactive({
+    loaded.dataSO.combined.markers <<- data.markers()
+    loaded.dataSO.combined.markers %>%
+      group_by(cluster) %>%
+      slice_max(n = input$nTopMarkers, order_by = avg_log2FC) #100 gives best results
+  }) 
+  
+  output$userTopMarkers <- reactive({
+    validate(
+      need(try(loaded.dataSO.combined.markers <<- data.markers()), "You have to define cell type markers first")
+    )
+    loaded.dataSO.combined.markerstop<<- top_mark_def()
+    #message printed
+    paste0("We'll use top ", input$nTopMarkers, " marker genes for cell type annotation")
+    
+  }) %>% bindEvent(input$topMarkers , ignoreInit = TRUE, ignoreNULL = TRUE)
+  
+    #Plot heatmap of top 20 markers 
+  output$HeatmapMarkers <- renderPlot({
+    validate(
+      need(try(loaded.dataSO.combined.markers <<- data.markers()), "You have to define cell type markers first and then choose the number of marker genes before plotting the heatmap")
+    )
+    validate(
+      need(try(loaded.dataSO.combined.no.cluster), "It seems you have skipped some previous steps!")
+    )
+    loaded.dataSO.combined.markerstop<<- top_mark_def()
+    #plot heatmap
+    DoHeatmap(loaded.dataSO.combined.no.cluster, features = loaded.dataSO.combined.markerstop$gene[1:20]) + NoLegend()
+    
+  })%>% bindEvent(input$plotHeatmap , ignoreInit = TRUE, ignoreNULL = TRUE)
+ 
+  #annotate gene clusters
+  gen_cluster_res <- reactive({
+    loaded.dataSO.combined.markerstop<<- top_mark_def()
+    annotateMyClusters(input$annotLibrary, input$typeOrganism, loaded.dataSO.combined.markerstop, loaded.dataSO.combined.no.cluster)
+  }) #%>% bindEvent(input$annotClusters , ignoreInit = TRUE, ignoreNULL = TRUE)
+  
+  output$anot_completed <- reactive({
+    "Annotation started"
+    gen_cluster_res <- gen_cluster_res()
+    #gen_cluster_res <<- annotateMyClusters(input$annotLibrary, input$typeOrganism, loaded.dataSO.combined.markerstop, loaded.dataSO.combined)
+    #loaded.dataSO.combined <<- gen_cluster_res[1][[1]]
+    #loaded.dataSO.combined.markers <<- gen_cluster_res[2][[1]]
+    #loaded.dataSO.combined.markerstop <<- gen_cluster_res[3][[1]]
+    #enriched <<- gen_cluster_res[4][[1]]
+    "Annotation completed"
+  }) %>% bindEvent(input$annotClusters , ignoreInit = TRUE, ignoreNULL = TRUE)
+
+  #update selectInput for gene clusters 
+  observe({
+    loaded.dataSO.combined <<- gen_cluster_res()[1][[1]]
+    updateSelectInput(session, "selectCluster",
+                      label = "Choose a gene cluster",
+                      choices =  levels(loaded.dataSO.combined$celltype))
+  })%>% bindEvent(input$showClusters , ignoreInit = TRUE, ignoreNULL = TRUE)
+  
+  
+  #Plot annotation results 
+  output$anotResults <- renderPlot({
+    enriched <<- gen_cluster_res()[4][[1]]
+    if(input$typeOrganism == "Mus musculus"){
+      if (getOption("enrichR.live")){
+        #for mouse
+       plot(plotEnrich(enriched[[paste("PanglaoDB_Augmented_2021_",input$selectCluster,sep="")]],  numChar = 40, y = "Count", orderBy = "P.value",title = paste("PanglaoDB"))+plotEnrich(enriched[[paste("CellMarker_Augmented_2021_",input$selectCluster,sep="")]], numChar = 40, y = "Count", orderBy = "P.value",title = paste("CellMarker"))+plotEnrich(enriched[[paste("Tabula_Muris_",input$selectCluster,sep="")]], numChar = 40, y = "Count", orderBy = "P.value",title = paste("Tabula_Muris")))
+      }else{message("Cannot resolve host: maayanlab.cloud. Check your internet connection and try again")}
+    }else{
+      if (getOption("enrichR.live")){
+        # for human
+        plot(plotEnrich(enriched[[paste("PanglaoDB_Augmented_2021_",input$selectCluster,sep="")]],  numChar = 40, y = "Count", orderBy = "P.value",title = paste("PanglaoDB"))+plotEnrich(enriched[[paste("CellMarker_Augmented_2021_",input$selectCluster,sep="")]], numChar = 40, y = "Count", orderBy = "P.value",title = paste("CellMarker"))+plotEnrich(enriched[[paste("Tabula_Sapiens_",input$selectCluster,sep="")]], numChar = 40, y = "Count", orderBy = "P.value",title = paste("Tabula_Sapiens")))
+      }else{message("Cannot resolve host: maayanlab.cloud. Check your internet connection and try again")}
+    }
+  })%>% bindEvent(input$plotAnnot , ignoreInit = TRUE, ignoreNULL = TRUE)
+  
+  #UMAP plot
+  output$vizClusters <- renderPlot({
+    loaded.dataSO.combined <<- gen_cluster_res()[1][[1]]
+    DimPlot(loaded.dataSO.combined, reduction = "umap", split.by = "label",label = TRUE)
+  })%>% bindEvent(input$plotUMAP , ignoreInit = TRUE, ignoreNULL = TRUE)
+  
+  #review expression of top markers
+  output$vizTopMarkersExpr <- renderPlot({
+    loaded.dataSO.combined.markerstop <<- gen_cluster_res()[3][[1]]
+    markers.to.plot <- unique(loaded.dataSO.combined.markerstop$gene) 
+    DotPlot(loaded.dataSO.combined, features = markers.to.plot[1:10], cols = c("blue", "red"), dot.scale = 8, split.by = "label") +
+      RotatedAxis()
+  })%>% bindEvent(input$topMarkersExpr , ignoreInit = TRUE, ignoreNULL = TRUE)
+  
+  
+  #Vizualize markers
+  #update dropdown menu of selectInput
+  observe({
+    loaded.dataSO.combined.markerstop <<- gen_cluster_res()[3][[1]]
+    updateSelectInput(session, "selectMarkerGene",
+                      label = "Choose a gene",
+                      choices =  unique(loaded.dataSO.combined.markerstop$gene) )
+  })%>% bindEvent(input$showMarkerGene , ignoreInit = TRUE, ignoreNULL = TRUE)
+  
+  #Violin plot 
+  output$vizGeneViolin <- renderPlot({
+    loaded.dataSO.combined <<- gen_cluster_res()[1][[1]]
+    VlnPlot(loaded.dataSO.combined, features = input$selectMarkerGene)
+  })%>% bindEvent(input$plotViolin , ignoreInit = TRUE, ignoreNULL = TRUE)
+  
+  #Feature plot 
+  output$vizGeneFeature <- renderPlot({
+    loaded.dataSO.combined <<- gen_cluster_res()[1][[1]]
+    FeaturePlot(loaded.dataSO.combined, features = input$selectMarkerGene,label = T)& theme(legend.position = c(0.1,0.2))
+  })%>% bindEvent(input$plotFeature , ignoreInit = TRUE, ignoreNULL = TRUE)
+  
+  #Proportion of cells
+  output$vizPropCells <- renderPlot({
+    loaded.dataSO.combined <<- gen_cluster_res()[1][[1]]
+    proportions<-as.data.frame(prop.table(table(loaded.dataSO.combined$celltype.label, loaded.dataSO.combined$orig.ident), margin = 2))
+    colnames(proportions) <- c("CellIDs", "Condition", "Proportion")
+    #pie chart with proportions
+    ggplot(proportions, aes(x="", y=Proportion, fill=CellIDs)) +
+      geom_bar(stat="identity", width=1, color="white") +
+      coord_polar("y", start=0) +
+      theme_void() # remove background, grid, numeric labels
+    
+  })%>% bindEvent(input$plotPropCells , ignoreInit = TRUE, ignoreNULL = TRUE)
+  
   
   ##### Correlation #####
   observeEvent(input$runCor, {
