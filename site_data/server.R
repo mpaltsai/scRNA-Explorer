@@ -551,17 +551,13 @@ function(input, output, session){
     annotateMyClusters(input$annotLibrary, input$typeOrganism, loaded.dataSO.combined.markerstop, loaded.dataSO.combined.no.cluster)
   }) #%>% bindEvent(input$annotClusters , ignoreInit = TRUE, ignoreNULL = TRUE)
   
-  output$anot_completed <- reactive({
+   output$anot_completed <- reactive({
     "Annotation started"
     gen_cluster_res <- gen_cluster_res()
-    #gen_cluster_res <<- annotateMyClusters(input$annotLibrary, input$typeOrganism, loaded.dataSO.combined.markerstop, loaded.dataSO.combined)
-    #loaded.dataSO.combined <<- gen_cluster_res[1][[1]]
-    #loaded.dataSO.combined.markers <<- gen_cluster_res[2][[1]]
-    #loaded.dataSO.combined.markerstop <<- gen_cluster_res[3][[1]]
-    #enriched <<- gen_cluster_res[4][[1]]
-    "Annotation completed"
+   "Annotation completed"
   }) %>% bindEvent(input$annotClusters , ignoreInit = TRUE, ignoreNULL = TRUE)
-
+  
+  
   #update selectInput for gene clusters 
   observe({
     loaded.dataSO.combined <<- gen_cluster_res()[1][[1]]

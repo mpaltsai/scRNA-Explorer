@@ -71,7 +71,7 @@ tab2_cell_clusters <-tabPanel("Cell type clustering",
                            helpText(strong("We have to define how many markers we are going to use for cell type annotation at the next step. You can choose from 1 to 200 top marker genes (default to 100). You can return and change your preference in case you don't find the annotation suitable.")),
                            numericInput(inputId= "nTopMarkers", "Define number of genes (up to 200)", value = 100, min = 1, max = 200, step = 1),
                            actionButton("topMarkers", 'Define number of markers'),
-                           textOutput("userTopMarkers") 
+                           span(textOutput("userTopMarkers")%>% withSpinner(), style = "color:dodgerblue") 
                          )       
                   ),
                   
@@ -115,7 +115,10 @@ tab2_cell_clusters <-tabPanel("Cell type clustering",
                            radioButtons(inputId= "annotLibrary", label = "Which annotation to use on plots?",
                                         choices = c("PanglaoDB_Augmented_2021"= "1", "CellMarker_Augmented_2021" = "2", "Tabula_Sapiens or Tabula_Muris" = "3"), selected = "3", inline=FALSE),
                            actionButton("annotClusters", 'Annotate clusters'),
-                           textOutput("anot_completed") %>% withSpinner()
+                           span(textOutput("anot_completed")%>% withSpinner(), style = "color:dodgerblue"),
+                           helpText(strong("Note")),
+                           helpText("At this step we execute a call to an external DB, enrichR, provided by https://maayanlab.cloud host. An unstable internet connection may interrupt this process.")
+                           
 
                          )       
                   ),
@@ -135,7 +138,7 @@ tab2_cell_clusters <-tabPanel("Cell type clustering",
                          wellPanel(
                            
                            helpText(strong("At this stage we can review annotation results")),
-                           actionButton("showClusters", 'Press to provide clusters in the list below'),
+                           actionButton("showClusters", 'Press to update the below list of cell clusters'),
                            selectInput("selectCluster", "Choose a gene cluster", ""),#choices = levels(loaded.dataSO.combined$celltype)),
                            actionButton("plotAnnot", 'Review annotation')
                            

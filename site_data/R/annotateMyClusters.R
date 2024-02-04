@@ -25,6 +25,7 @@ annotateMyClusters <- function(x, a, b, c){
       markers_to_search<-loaded.dataSO.combined.markerstop$gene[loaded.dataSO.combined.markerstop$cluster==m]
       if (getOption("enrichR.live")) {
         #wait 1 sec
+        Sys.sleep(1)
         enriched <- enrichr(markers_to_search, dbstouse)
         Sys.sleep(1)
       }else{message("Cannot resolve host: maayanlab.cloud. Check your internet connection and try again")}
@@ -48,7 +49,7 @@ annotateMyClusters <- function(x, a, b, c){
 
     }
   }else{message("Cannot resolve host: maayanlab.cloud. Check your internet connection and try again")}
-  message("finished annotation")
+  message("Finished annotation")
   
   #Rename indents 
   new.cluster.ids <- make.names(annotatedclusters,unique = T)
