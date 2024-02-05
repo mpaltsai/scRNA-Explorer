@@ -21,12 +21,23 @@ iRNA <- function(sce, method, alpha, geneSparsity, targetGenes, correlation_thre
 
   
   #read data
-  #sce <- readRDS(opt$data)
-  
+  #loaded.dataSO.combined@assays$RNA@counts[,loaded.dataSO.combined$celltype==input$selectCluster]
+  #seurat = CreateSeuratObject(counts = loaded.dataSO.combined@assays$RNA@counts[,loaded.dataSO.combined$celltype=="Fibroblast.Heart.CL.0000057"], project = "sample", min.cells = paramSeuMinCells)
+  #targetGenes=c("Alpl")
+  #paramCorrMethod = "pearson"
   paramSeuMinCells    = paramGeneSparcityThr*dim(sce)[2]
   
-  #create a seurat object to work with
+  #create a seurat object to work with but check first if it is already a seurat object
   seurat = CreateSeuratObject(counts = sce@assays@data@listData$counts, project = "sample", min.cells = paramSeuMinCells)
+  seurat <- tryCatch( CreateSeuratObject(counts = sce@assays@data@listData$counts, project = "sample", min.cells = paramSeuMinCells), error = function(e) { 
+    #I must provide the input$selectCluster in the function, so I name the sce to input$selectCluster and provide the right sce in counts below
+    cl = sce
+    CreateSeuratObject(counts = loaded.dataSO.combined@assays$RNA@counts[,loaded.dataSO.combined$celltype==cl], project = "sample", min.cells = paramSeuMinCells)
+  }, warning = function(w){
+    cl = sce
+    CreateSeuratObject(counts = loaded.dataSO.combined@assays$RNA@counts[,loaded.dataSO.combined$celltype==cl], project = "sample", min.cells = paramSeuMinCells)
+    }
+  )
   
   #discard genes that are not detected in any cell
   #Ismini note: I think is already implemented with paramSeuMinCells
@@ -54,6 +65,7 @@ iRNA <- function(sce, method, alpha, geneSparsity, targetGenes, correlation_thre
   genes.incl = toupper(genes.incl)
   
   message("\nAnalysis will run with ", length(genes.incl), " gene(s): ", genes.incl, "\n")
+  
   
   #message(cat(genes.incl, sep = " ", "\n"))
   
@@ -152,7 +164,8 @@ iRNA <- function(sce, method, alpha, geneSparsity, targetGenes, correlation_thre
       }
       corr.matrix
     }
-    
+    #alpha.level = 0.05
+    #c.r = 0.3
     message("\n Running correlation...")
     corr.matrix = suppressWarnings(cor.fun())
     message("\n Correlation test run completed")
@@ -201,10 +214,10 @@ iRNA <- function(sce, method, alpha, geneSparsity, targetGenes, correlation_thre
     message("\n Wilcoxon test run completed")
     
     #again keep only those genes where p values are less than alpha.level
-    corr.sign.genes <- corr.sign[which(corr.sign[,3]<0.05), , drop = FALSE]
+    corr.sign.genes <- corr.sign[which(corr.sign[,3]<alpha.level), , drop = FALSE]
     
     if(length(corr.sign.genes)==0){
-      message("\n None correlated gene returned with p value < 0.05")
+      message(paste0("\n None correlated gene returned with p value < ", alpha.level))
       next
     }
     #order the list by the r coefficient

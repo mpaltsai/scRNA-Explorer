@@ -70,10 +70,18 @@ biological insights of a given process."
                  ),
                  fluidRow(
                    column(6,
-                          helpText("Find related genes: Gene correlation across all cells"),
+                          helpText("Cell type clustering: Explore the presence of different cell types"),
                           wellPanel(
-                            "Having filtered and unfiltered (i.e. initial filtering that took place in the pre-processing phase) data, someone can run a correlation analysis 
-                            for a desired gene in 'Gene correlation across all cells' tab. Resulting correlated genes to the desired gene are shown in tables. We generate three 
+                            "Prior to gene correlation someone can review different cell types present in the assay." 
+                          )
+                   )
+                 ),
+                 fluidRow(
+                   column(6,
+                          helpText("Find related genes: Gene correlation"),
+                          wellPanel(
+                            "Having filtered and unfiltered (i.e. initial filtering that took place in the pre-processing phase) data, as well as cell type clusters, someone can run a correlation analysis 
+                            for a desired gene among all single cells or cell type clusters in the assay. Resulting correlated genes to the desired gene are shown in tables. We generate three 
                             tables that correspond to all correlated, positive correlated and negative correlated genes" 
                           )
                    )
@@ -82,8 +90,8 @@ biological insights of a given process."
                    column(6,
                           helpText("Explore biological background: Gene enrichment analysis"),
                           wellPanel(
-                            "Finally, someone can explore enriched biological phenomena to which correlated genes are involved (and thus the desired gene) through a gene enrichment 
-                            analysis, which takes place in 'Gene enrichment analysis' tab." 
+                            "Finally, someone can explore enriched biological phenomena to which correlated genes are involved (and thus the desired gene might be involved) through gene enrichment 
+                            on correlated genes, which takes place in 'Gene enrichment analysis' tab." 
                           )
                    )
                  ),

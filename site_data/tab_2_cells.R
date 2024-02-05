@@ -194,8 +194,8 @@ tab2_cell_clusters <-tabPanel("Cell type clustering",
                            
                            helpText(strong("We can visualize some individual markers")),
                            actionButton("showMarkerGene", 'Press to select a gene from the list below'),
-                           selectInput("selectMarkerGene", "Choose a gene", ""),
-                           actionButton("plotViolin", 'Violin plot')
+                           selectizeInput("selectMarkerGene", "Choose a gene", ""),
+                           actionButton("plotViolin", 'Expression across cell type clusters with violin plot')
                            
                          )       
                   ),
@@ -213,7 +213,7 @@ tab2_cell_clusters <-tabPanel("Cell type clustering",
                   column(4,
                          wellPanel(
 
-                           actionButton("plotFeature", 'Feature plot')
+                           actionButton("plotFeature", 'Expression across cell type clusters with UMAP (Feature plot)')
                            
                          )       
                   ),
@@ -232,7 +232,7 @@ tab2_cell_clusters <-tabPanel("Cell type clustering",
                   column(4,
                          wellPanel(
                            
-                           helpText(strong("Additionally we can see what proportion of cells are in each cluster")),
+                           helpText(strong("Additionally we can see the proportion of cells in each cluster")),
                            actionButton("plotPropCells", 'Proportion of cells')
                            
                          )       

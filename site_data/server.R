@@ -487,6 +487,7 @@ function(input, output, session){
   
   #Define cell type markers
   data.markers <- reactive({
+    loaded.dataSO.combined.no.cluster <<- dim_red_data()
     DefaultAssay(loaded.dataSO.combined.no.cluster) <<- "RNA"
     FindAllMarkers(loaded.dataSO.combined.no.cluster, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
   })
@@ -599,12 +600,12 @@ function(input, output, session){
   
   
   #Vizualize markers
-  #update dropdown menu of selectInput
+  #update dropdown menu of selectizeInput for available marker genes
   observe({
     loaded.dataSO.combined.markerstop <<- gen_cluster_res()[3][[1]]
-    updateSelectInput(session, "selectMarkerGene",
+    updateSelectizeInput(session, "selectMarkerGene",
                       label = "Choose a gene",
-                      choices =  unique(loaded.dataSO.combined.markerstop$gene) )
+                      choices =  unique(loaded.dataSO.combined.markerstop$gene), server =TRUE )
   })%>% bindEvent(input$showMarkerGene , ignoreInit = TRUE, ignoreNULL = TRUE)
   
   #Violin plot 
@@ -634,6 +635,47 @@ function(input, output, session){
   
   
   ##### Correlation #####
+  
+  #update dropdown menu for selected gene choices
+  #observe({req(input$corData, se, keep_index, loaded.dataSO.combined)
+  ##  if(input$corData=="filtered"){
+   #   updateSelectizeInput(session, "targetGenes",
+   #                     label = "'Bait' gene to run correlation analysis with",
+    #                    choices =  array(se[ ,keep_index]@assays@data@listData$counts@Dimnames[1][[1]]), server = TRUE)
+    #}else if(input$corData=="unfiltered"){
+    #  updateSelectizeInput(session, "targetGenes",
+     #                   label = "'Bait' gene to run correlation analysis with",
+      #                  choices =  array(se@assays@data@listData$counts@Dimnames[1][[1]]), server = TRUE)
+    #}else if(input$corData=="clustered"){
+     # loaded.dataSO.combined <<- gen_cluster_res()[1][[1]]
+      #updateSelectInput(session, "targetGenesCluster",
+       #                 label = "Choose a gene cluster",
+        #                choices =  levels(loaded.dataSO.combined$celltype))
+    #  updateSelectizeInput(session, inputId="targetGenes", label="'Bait' gene from cell type cluster to run correlation analysis with", choices=array(loaded.dataSO.combined@assays$RNA@counts@Dimnames[1][[1]]), server = TRUE)
+    #}
+    
+  #})%>% bindEvent(input$corData , ignoreInit = TRUE, ignoreNULL = TRUE)
+  
+  observe({
+    validate(need(try(keep_index), "It seems you haven't filtered your data yet."))
+    validate(need(try(se), "You'll have to complete the preprocessing steps before running a correlation analysis."))
+    validate(need(try(loaded.dataSO.combined <<- gen_cluster_res()[1][[1]]), "You have to complete gene cluster annotation steps first!"))
+    validate(need(try(loaded.dataSO.combined.no.cluster), "You have to complete gene cluster annotation steps first!"))
+    
+    if(input$corData=="clustered"){
+      updateSelectInput(session, "targetGenesCluster",
+                        label = "Choose a gene cluster",
+                        choices =  levels(loaded.dataSO.combined$celltype))
+      
+    }
+    updateSelectizeInput(session, "targetGenes",
+                         label = "'Bait' gene to run correlation analysis with",
+                         choices =  array(se@assays@data@listData$counts@Dimnames[1][[1]]), server = TRUE)
+  })%>% bindEvent(input$corData , ignoreInit = TRUE, ignoreNULL = TRUE)
+  
+
+  
+  
   observeEvent(input$runCor, {
       withCallingHandlers({
         shinyjs::html("cor_completed", "")
@@ -644,16 +686,12 @@ function(input, output, session){
       "Running analysis with filtered data"
       iRNA_cor_tables <<- iRNA(se[ ,keep_index], input$method, input$alpha, input$geneSparsity, input$targetGenes, input$correlation_threshold)
       
-    }else{
+    }else if(input$corData=="unfiltered"){
       "Running analysis with raw data"
       iRNA_cor_tables <<- iRNA(se, input$method, input$alpha, input$geneSparsity, input$targetGenes, input$correlation_threshold)
-      #output$dt1 <- renderDataTable(DT::datatable(
-        #iRNA_cor_tables[[1]]))
-     # output$dt2 <- renderDataTable(DT::datatable(
-      #  iRNA_cor_tables[[2]]))
-      #output$dt3 <- renderDataTable(DT::datatable(
-     #   iRNA_cor_tables[[3]]))
-      
+    }else{
+      cat(paste0("Running analysis with cell type cluster:", input$selectCluster))
+      iRNA_cor_tables <<- iRNA_cluster(loaded.dataSO.combined, input$method, input$alpha, input$geneSparsity, input$targetGenes, input$correlation_threshold, input$selectCluster)
     }}
   },
   message = function(m) {

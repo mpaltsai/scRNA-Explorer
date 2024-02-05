@@ -1,4 +1,4 @@
-tab3 <- tabPanel("Gene correlation across all cells",
+tab3 <- tabPanel("Gene correlation",
                  sidebarLayout(
                    sidebarPanel(
                      ### Correlation method ###
@@ -9,10 +9,21 @@ tab3 <- tabPanel("Gene correlation across all cells",
                      
                      numericInput(inputId="alpha", "At which level of significance (p value threshold)?", value = 0.05, min = 0.001, max = 1, step = 0.001),
                      radioButtons(inputId= "corData", label = "With which data?",
-                                  choices = c("Filtered"= "filtered", "Unfiltered" = "unfiltered"), selected = character(0), inline=TRUE),
+                                  choices = c("Filtered"= "filtered", "Unfiltered" = "unfiltered", "Cell type cluster" = "clustered"), selected = character(0)),
+                      
+                    selectizeInput(inputId="targetGenes", label="'Bait' gene to run correlation analysis with", choices=NULL),
+                    helpText("Note that some genes will be excluded in the subsequent corelation analysis due to due to limited expression among single cells and/or filtering"),
+
+                     conditionalPanel(
+                       condition = "input.corData=='clustered'",
+                       selectInput(inputId="targetGenesCluster",
+                                  label = "Choose a gene cluster",
+                                  choices =  ""),
+                       helpText("Please select one cluster from the dropdown menu"),
+                       
+                     ),
+                     
                      numericInput(inputId= "geneSparsity", "Define the percentage of cells a gene is expressed (at least 2%)", value = 0.02, min = 0.019, max = 1, step = 0.01),
-                     textInput(inputId="targetGenes", label="'Bait' gene to run correlation analysis with", value="Erf"),
-                     helpText("Please provide one gene with a gene name ID"),
                      actionButton("runCor", "Run correlation analysis"),
                      textOutput("cor_completed"),
                      
