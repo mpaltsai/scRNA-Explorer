@@ -391,11 +391,11 @@ function(input, output, session){
     updateNumericInput(session, "maxUMIsPerCell", value = max(calc_metrics()$nUMI))
     updateNumericInput(session, "minGenesPerCell", value = min(calc_metrics()$nGene))
     updateNumericInput(session, "maxGenesPerCell", value = max(calc_metrics()$nGene))
-    updateNumericInput(session, "minMitoPerCell", value = round(min(calc_metrics()$mitoRatio),digits = 2))
-    updateNumericInput(session, "maxMitoPerCell", value = round(max(calc_metrics()$mitoRatio),digits = 2))
-    updateNumericInput(session, "minRbcPerCell", value = round(min(calc_metrics()$rbcRatio),digits = 2))
-    updateNumericInput(session, "maxRbcPerCell", value = round(max(calc_metrics()$rbcRatio),digits = 2))
-    updateNumericInput(session, "noveltyPerCell", value = round(min(calc_metrics()$log10GenesPerUMI),digits = 2))
+    updateNumericInput(session, "minMitoPerCell", value = round(min(calc_metrics()$mitoRatio),digits = 5))
+    updateNumericInput(session, "maxMitoPerCell", value = round(max(calc_metrics()$mitoRatio),digits = 5))
+    updateNumericInput(session, "minRbcPerCell", value = round(min(calc_metrics()$rbcRatio),digits = 5))
+    updateNumericInput(session, "maxRbcPerCell", value = round(max(calc_metrics()$rbcRatio),digits = 5))
+    updateNumericInput(session, "noveltyPerCell", value = round(min(calc_metrics()$log10GenesPerUMI),digits = 5))
     
   }) %>% bindEvent(input$makeMetrics, ignoreInit = TRUE, ignoreNULL = TRUE)
   
