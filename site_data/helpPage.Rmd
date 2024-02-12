@@ -1,0 +1,66 @@
+---
+title: "Help Page"
+author: "Ismini"
+date: "2024-02-12"
+output: html_document
+runtime: shiny
+---
+
+#### How to transform your count matrix from tsv/csv to RDS to use it as input to scRNA-Explorer
+
+Run in an R environment the following commands:\
+First define the file location
+```{r}
+your_filepath <- "~/path/to/your/count matrix.csv"
+```
+Then read the file. \
+Note:\
+If you want to work with base packages of R you can read the file with the following ways depending on file formats (csv or tsv)
+```{r}
+# csv
+your_count_matrix <- read.csv(input, header = TRUE, row.names = 1, sep = ",")
+# tsv
+your_count_matrix <- read.csv(input, header = TRUE, row.names = 1, sep = "\t")
+```
+Otherwise, and recommended for large files, you can use fread function from package data.table \
+
+```{r}
+# If not installed already, run:
+install.packages("data.table")
+# and read the table
+your_count_matrix <- as.matrix(data.table::fread(your_filepath),rownames=1)
+```
+Convert to a sparse matrix for more efficient computation
+```{r}
+counts <- as(your_count_matrix, "dgCMatrix")
+```
+You can check whether barcodes and gene names are present viewing the output of the following commands
+```{r}
+# barcodes
+colnames(read_counts) 
+#In case of NAs import barcodes
+colnames(read_counts) <- colnames(your_count_matrix)
+# gene IDs 
+rownames(read_counts)
+rownames(read_counts) <-rownames(your_count_matrix)
+```
+Save as RDS
+```{r}
+# First create a SingleCellExperiment object
+se_counts <-SingleCellExperiment::SingleCellExperiment(assays=list(counts=read_counts))
+# Save your data locally as an RDS object, with the desired filename
+saveRDS(se_counts, paste0("the_desired_filename"))
+```
+Now you are ready to upload your count matrix in as an RDS object to scRNA-Explorer
+
+***
+#### Upload size limit
+There is a size limit set to 10 GB for uploads.
+***
+
+scRNA-Explorer has been developed on reactive modules. \
+It is highly recommended to follow a step-by-step approach.\
+Messages return when processes complete successfully, otherwise process failure warnings emerge.\
+If you encounter any problem, or have a suggestion, please contact us: \
+ibaltsavia@gmail.com \
+iliopj@med.uoc.gr

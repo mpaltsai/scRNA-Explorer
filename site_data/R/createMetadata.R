@@ -1,4 +1,4 @@
-createMetadata <- function(x, a, b){
+createMetadata <- function(countsData, a, b){
   ####
   # Check this:Cannot connect to AnnotationHub server, using 'localHub=TRUE' instead
   #Using 'localHub=TRUE'
@@ -7,17 +7,9 @@ createMetadata <- function(x, a, b){
   #Warning: call dbDisconnect() when finished working with a connection
   ####
   
-  countsData = x
   organismName = a
   gene.name = b
-  metadata <- data.frame(row.names = colnames(countsData), cells = colnames(countsData), stringsAsFactors = F)
-  ## Add number of UMIs for each gene per cell to metadata
-  metadata$nUMI <- Matrix::colSums(countsData)
-  ## Add number of genes detected per cell to metadata
-  metadata$nGene <- Matrix::colSums(countsData > 0)
-  ## Add number of UMIs per gene for each cell to metadata
-  metadata$log10GenesPerUMI <- log10(metadata$nGene) / log10(metadata$nUMI)
-  metadata$sample <- "sample"
+
   
   if(organismName == "Mus musculus"){
     load("annotations_mmus.Rda")
@@ -48,12 +40,12 @@ createMetadata <- function(x, a, b){
   # Extract IDs for mitochondrial genes and hemoglobins
   
   #First check if mitochondrial genes annotations are defined as "MT" or "mt"
- 
-  if (identical(grep("mt",unique(annotations$seq_name)), integer(0))){
+ #no need to do this, it is "MT" for both organims in annotations$seq_name
+  #if (identical(grep("mt",unique(annotations$seq_name)), integer(0))){
     name_init <- "MT"
-  }else{
-    name_init <- "mt"
-  }
+  #}else{
+  # name_init <- "mt"
+ # }
   
   if(gene.name){
     mt <- annotations %>% 
@@ -66,8 +58,22 @@ createMetadata <- function(x, a, b){
       dplyr::select(gene_name, gene_id, seq_name)
     colnames(rowNames) = "gene_id"
     
-    xxx = merge(as.data.frame(rowNames), rowNames2, by.x = "gene_id", by.y = "gene_id", sort = FALSE)
-    rownames(countsData) <- xxx$gene_name
+    #xxx = merge(as.data.frame(rowNames), rowNames2, by.x = "gene_id", by.y = "gene_id", sort = FALSE)
+    xxx <- merge(rowNames, rowNames2, by = "gene_id", all=TRUE, sort = FALSE)
+    subset_counts <- FALSE
+    rownames(countsData) <- tryCatch( 
+      {
+        xxx$gene_name
+      },
+      error = function(e) {
+        subset_counts <- TRUE
+      }
+    )
+    if(subset_counts){
+      countsData <- countsData[which(!is.na(xxx$gene_name)),]
+      rownames(countsData) <- xxx$gene_name[which(!is.na(xxx$gene_name))]
+    }
+
     
     mt <- annotations %>% 
       dplyr::filter(seq_name == name_init) %>%
@@ -77,8 +83,17 @@ createMetadata <- function(x, a, b){
   #rbc = rbc[-(grep("like", rbc, ignore.case = TRUE))]
   rbc = annotations[which(annotations$description %in% rbc), match("gene_name", colnames(annotations))]
   
+  metadata <- data.frame(row.names = colnames(countsData), cells = colnames(countsData), stringsAsFactors = F)
+  ## Add number of UMIs for each gene per cell to metadata
+  metadata$nUMI <- Matrix::colSums(countsData)
+  ## Add number of genes detected per cell to metadata
+  metadata$nGene <- Matrix::colSums(countsData > 0)
+  ## Add number of UMIs per gene for each cell to metadata
+  metadata$log10GenesPerUMI <- log10(metadata$nGene) / log10(metadata$nUMI)
+  metadata$sample <- "sample"
   # Number of UMIs assigned to mitochondrial genes
   metadata$mtUMI <- Matrix::colSums(countsData[which(rownames(countsData) %in% mt),], na.rm = T)
+  #counts@Dimnames[1]
   # Ensure all NAs receive zero counts
   metadata$mtUMI[is.na(metadata$mtUMI)] <- 0
   
@@ -89,5 +104,5 @@ createMetadata <- function(x, a, b){
   metadata$rbcUMI[is.na(metadata$rbcUMI)] <- 0
   metadata$rbcRatio <- metadata$rbcUMI/metadata$nUMI
   
-  return(metadata)
+  return(c(metadata, counts = countsData))
 }

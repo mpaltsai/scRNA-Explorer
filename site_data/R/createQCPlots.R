@@ -2,7 +2,7 @@
 
 #number of UMIs per cell
 createUMIsPlot <- function(my_metrics, minNUMIs, maxNUMIs){
-  my_metrics %>% 
+  as.data.frame(my_metrics) %>% 
     ggplot(aes(color=sample, x=nUMI, fill= sample)) + 
     geom_density() + 
     scale_x_log10() + 
@@ -13,7 +13,7 @@ createUMIsPlot <- function(my_metrics, minNUMIs, maxNUMIs){
 
 #nGenes histogram
 createGenesHistPlot <- function(my_metrics, minNGenes, maxNGenes){
-  my_metrics %>% 
+  as.data.frame(my_metrics) %>% 
     ggplot(aes(color=sample, x=nGene, fill= sample)) + 
     geom_density() + 
     scale_x_log10() + 
@@ -24,7 +24,7 @@ createGenesHistPlot <- function(my_metrics, minNGenes, maxNGenes){
 
 #nGenes boxplot
 createGenesBoxPlot <- function(my_metrics){
-  my_metrics %>% 
+  as.data.frame(my_metrics) %>% 
     ggplot(aes(x=sample, y=nGene, fill=sample)) + 
     geom_boxplot() + 
     ggtitle("NCells vs NGenes")
@@ -32,7 +32,7 @@ createGenesBoxPlot <- function(my_metrics){
 
 #UMIs vs nGenes with mitoRatio
 createUMIsGenesPlot<- function(my_metrics, minNGenes, maxNGenes){
-  my_metrics %>% 
+  as.data.frame(my_metrics) %>% 
     ggplot(aes(x=nUMI, y=nGene)) + 
     geom_point(aes(color=mitoRatio)) +  
     stat_smooth(method=lm) +
@@ -45,7 +45,7 @@ createUMIsGenesPlot<- function(my_metrics, minNGenes, maxNGenes){
 
 #UMIs vs nGenes with hemoRatio
 createUMIsGenesPlotRBC <- function(my_metrics, minNGenes, maxNGenes){
-  my_metrics %>% 
+  as.data.frame(my_metrics) %>% 
     ggplot(aes(x=nUMI, y=nGene)) + 
     geom_point(aes(color=rbcRatio)) + 
     stat_smooth(method=lm) +
@@ -58,7 +58,7 @@ createUMIsGenesPlotRBC <- function(my_metrics, minNGenes, maxNGenes){
 
 #plot mitoRatio
 createmitoRatioPlot <- function(my_metrics, minMitoRatio, maxMitoRatio){
-  my_metrics %>% 
+  as.data.frame(my_metrics) %>% 
     ggplot(aes(color=sample, x=mitoRatio, fill=sample)) + 
     geom_density() + 
     #scale_x_log10() + 
@@ -68,7 +68,7 @@ createmitoRatioPlot <- function(my_metrics, minMitoRatio, maxMitoRatio){
 
 #plot hemoRatio
 createrbcRatioPlot <- function(my_metrics, minRbcRatio, maxRbcRatio){
-  my_metrics %>% 
+  as.data.frame(my_metrics) %>% 
     ggplot(aes(color=sample, x=rbcRatio, fill=sample)) + 
     geom_density() + 
     #scale_x_log10() + 
@@ -78,7 +78,7 @@ createrbcRatioPlot <- function(my_metrics, minRbcRatio, maxRbcRatio){
 
 #Genes vs UMIs
 createnoveltyPlot <- function(my_metrics, minlog10GenesPerUMI, maxlog10GenesPerUMI){
-  my_metrics %>%
+  as.data.frame(my_metrics) %>%
     ggplot(aes(x=log10GenesPerUMI, color = sample, fill=sample)) +
     geom_density() + 
     geom_vline(xintercept = minlog10GenesPerUMI)+

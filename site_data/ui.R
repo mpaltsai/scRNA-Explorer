@@ -40,6 +40,7 @@ source("tab_2dev.R", local=TRUE)
 source("tab_2_cells.R", local=TRUE)
 source("tab_3.R", local=TRUE)
 source("tab_4.R", local=TRUE)
+source("helpPage.R", local=TRUE)
 
 ui <- fluidPage(
   
@@ -60,6 +61,7 @@ ui <- fluidPage(
     tab2_cell_clusters,
     tab3,
     tab4,
+    tab5
     #tabPanel("Gene correlation across cell types"),
     #tabPanel("Gene enrichment analysis"),
     #tabPanel("Gene set comparison")

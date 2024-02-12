@@ -33,8 +33,9 @@ tab2 <-tabPanel("Quality Control Plots",
              conditionalPanel(
                condition="input.makeNBUMIs>0",
                helpText("You can slide the vertical lines on the plot by changing the values below"),
+               #uiOutput("myControl")
                sliderInput("nUMIs", "Number of UMIs:",
-                           min = 10, max = 1000, value = c(10,1000), step = 10)
+                          min = 10, max = 1000, value = c(10,1000), step = 10)
            )
       
     )),
@@ -327,6 +328,9 @@ tab2 <-tabPanel("Quality Control Plots",
            ),
            wellPanel(
              helpText(strong("Now we have filtered out cells we can redraw plots to assess our thresholds")),
+             helpText(strong("But first we have to re-compute our metrics")),
+             actionButton("filt_metrics", "Metrics of filtered data"),
+             span(textOutput("metricsFilt") %>% withSpinner(), style = "color:dodgerblue"),
              actionButton("redrawPlots", "Plots with filtered cells")
            ))
            

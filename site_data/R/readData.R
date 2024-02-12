@@ -1,11 +1,12 @@
 ### read data
 
-readData <- function(){
+readData <- function(count.matrix, seurat, inputFile, inputDir){
   input = inputFile
   
   #provide the directory to access data from 10X platform
   input_dir = inputDir
-  
+  count.matrix = count.matrix
+  seurat = seurat
   if(count.matrix){
     # Import count matrix
     #sm <- read.csv(input, header = TRUE, row.names = 1, sep = "\t")
@@ -32,17 +33,18 @@ readData <- function(){
       #return(txi)
       
     }else{
+      #input = "input_data/scWCP10_S190_matrix.count.csv"
+      txi <- as.matrix(data.table::fread(input),rownames=1)
       
-      txi <-data.table::fread(input)
       #txi <- read.csv(input, header = TRUE, row.names = 1, sep = "\t")
       # Convert to a sparse matrix for more efficient computation
-      #counts <- as(as.matrix(txi[,]), "dgCMatrix")
-      counts <- mltools::sparsify(txi)
+      counts <- as(txi[,], "dgCMatrix")
+      #counts <- mltools::sparsify(txi)
       # Import barcodes
       #cell_ids <- colnames(txi)
       # Import genes
-      #genes <- txi$V1
-      rownames(counts) <-txi$V1
+      
+      #rownames(counts) <-txi$V1
       return(counts)
     }
   }else{

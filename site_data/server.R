@@ -9,12 +9,12 @@
 
 library(shiny)
 library(shinyjs)
-library(tools)
+#library(tools)
 library(dplyr)
 library(utils)
 
 
-options(shiny.maxRequestSize=8000*1024^2)  #max upload file size 5GB
+options(shiny.maxRequestSize=10000*1024^2)  #max upload file size 5GB
 
 
 #load functions
@@ -24,141 +24,208 @@ function(input, output, session){
   
   ##### Upload, setting parameters and read data routine #####
   
-  #Validate uploaded .csv file
+  #Validate uploaded .csv or .tsv file
   output$uploadCsvValidation <- reactive({
-    validate(need(identical(tools::file_ext(input$csvFile$datapath),"csv"),"Invalid extension (not a .csv file)"))
+           if(tools::file_ext(input$csvFile$name)!= "csv" & tools::file_ext(input$csvFile$name)!= "tsv"){
+           validate("Invalid file; Please upload a .csv or .tsv file")}
+           
+    #validate(need(identical(tools::file_ext(input$csvFile$datapath),"csv"),"Invalid extension (not a .csv file)"))
     }) %>% bindEvent(input$csvFile, ignoreInit = TRUE, ignoreNULL=TRUE)
+  
+  #Validate uploaded mtx (10X matrix)
+  output$uploadmtxValidation <- reactive({
+    if(tools::file_ext(input$mtxInput$name) != "mtx" & 
+       substr(input$mtxInput$name, nchar(input$mtxInput$name)-6, nchar(input$mtxInput$name)-0) != ".mtx.gz"){
+      validate("Invalid file; Please upload a .mtx or .mtx.gz file")}
+  }) %>% bindEvent(input$mtxInput, ignoreInit = TRUE, ignoreNULL=TRUE)
+
+  
+  #Validate uploaded genes 10X
+  output$uploadgenes10XValidation <- reactive({
+    if(substr(input$genes10XInput$name, nchar(input$genes10XInput$name)-3, nchar(input$genes10XInput$name)-0) != ".tsv" & 
+       substr(input$genes10XInput$name, nchar(input$genes10XInput$name)-6, nchar(input$genes10XInput$name)-0)!= ".tsv.gz"){
+      validate("Invalid file; Please upload a .tsv or .tsv.gz file")}
+  }) %>% bindEvent(input$genes10XInput, ignoreInit = TRUE, ignoreNULL=TRUE)
+
+  
+  #Validate uploaded barcodes 10X
+  output$uploadbarcodes10XValidation <- reactive({
+    if(substr(input$barcodes10XInput$name, nchar(input$barcodes10XInput$name)-3, nchar(input$barcodes10XInput$name)-0) != ".tsv" & 
+       substr(input$barcodes10XInput$name, nchar(input$barcodes10XInput$name)-6, nchar(input$barcodes10XInput$name)-0)!= ".tsv.gz"){
+      validate("Invalid file; Please upload a .tsv or .tsv.gz file")}
+  }) %>% bindEvent(input$barcodes10XInput, ignoreInit = TRUE, ignoreNULL=TRUE)
+  
   
   #Validate uploaded .rds file
   output$uploadRdsValidation <- reactive({
-    validate(need(identical(tools::file_ext(input$rdsFile$datapath),"rds"),"Invalid extension (not a .rds file)"))
+    validate(need(identical(tools::file_ext(input$rdsFile$name),"rds"),"Invalid extension (not a .rds file)"))
   }) %>% bindEvent(input$rdsFile, ignoreInit = TRUE, ignoreNULL=TRUE)
   
   #Check if there ism't any file uploaded or state which kind of input the user has provided
-  output$uploadSummary <- reactive({
-      #need(input$dir, 'Provide a directory'),
-      if(input$testData==1){
-        count.matrix <<- TRUE
-        seurat <<- TRUE
-        inputFile <<- "raw_se_S190.rds"
-        inputDir <<- FALSE
-        paste0("Your input to the following QC pipeline is the test dataset.","\n",
-               "You'll have to define origin organism and features annotation type below.", "\n",
-               "This dataset comes from Mus musculus and genes are annotated as gene names.")
-      }else if(input$dir== "Enter directory path..." & all(is.null(c(input$csvFile, input$rdsFile)))){
-        "Please provide an input (file or directory)"
+  #second try more shinyist...
+  
+    user_input <- reactive({
+      #if(length(input$testData)==0){
+       # validate("You haven't chosen your data type yet")
+      if(input$testData == 1){
+        count.matrix <- TRUE
+        seurat <- TRUE
+        inputFile <- "raw_se_S190.rds"
+        inputDir <- FALSE
+        my_counts <- c(counts = readData(count.matrix, seurat, inputFile, inputDir),
+                    mes = "Reading data completed. Features are in Ensembl IDs and come from mouse. These parameters are pre-selected, no need to define them below.")
+        #my_counts_test <<- readData(count.matrix, seurat, inputFile, inputDir) ########################################################ATTENTION#############
+
       }else if(input$typeData == 1){
-        count.matrix <<- TRUE
-        seurat <<- FALSE
-        inputFile <<- input$csvFile$datapath
-        inputDir <<- FALSE
-        paste0("Your input to the following QC pipeline is: ", input$csvFile$name)
-      }else if(input$typeData ==2){
-        count.matrix <<- FALSE
-        seurat <<- FALSE
-        inputFile <<- FALSE
-        inputDir <<- TRUE
-        paste0("The directory to search for additional files is: ", input$dir)
-      } else if(input$typeData==3){
-        count.matrix <<- TRUE
-        seurat <<- TRUE
-        inputFile <<- input$rdsFile$datapath
-        inputDir <<- FALSE
-        paste0("Your input to the following QC pipeline is: ", input$rdsFile$name)
+        count.matrix <- TRUE
+        seurat <- FALSE
+        inputFile <- input$csvFile$datapath
+        inputDir <- FALSE
+        my_counts <- c(counts = readData(count.matrix, seurat, inputFile, inputDir),
+                   mes = "Reading data completed ")
+       
+      }else if(input$typeData==3){
+        count.matrix <- TRUE
+        seurat <- TRUE
+        inputFile <- input$rdsFile$datapath
+        inputDir <- FALSE
+        my_counts <- c(counts = readData(count.matrix, seurat, inputFile, inputDir),
+                    mes = "Reading data completed ")
+
+      }else if(input$typeData==2){
+        my_counts <- c(counts = my_read10X(mtxPath = input$mtxInput$datapath, 
+                           genesPath = input$genes10XInput$datapath, 
+                           barcodesPath = input$barcodes10XInput$datapath)$counts,
+                    mes = "Reading data completed ")
+          
+        ###i put it inside my_read10X at the end 
+        #counts <- as(input_counts, "dgCMatrix")
+        
       }
-   #validate(need(identical(all(is.null(c(input$csvFile, input$dir, input$rdsFile))), NULL), "Please upload a file"))
-      #combn(c(input$csvFile, input$dir, input$rdsFile), 2, simplify= FALSE)
-    }) %>% bindEvent(input$checkInput, ignoreInit = TRUE, ignoreNULL = FALSE)
-  
-  ### Text box to check inputs and backend parameters
-  #output$inputParameters <- reactive({
-  #  paste0("count.matrix: ", count.matrix, " seurat: ", seurat, " input dir: " ,inputDir, " input file: ", inputFile)
-  #  }) %>% bindEvent(input$checkInput, ignoreInit = TRUE, ignoreNULL = TRUE)
-  
+    })%>% bindEvent(input$startQC , ignoreInit = TRUE, ignoreNULL = TRUE)
+    
+    #store objects in reactiveValues list
+    #myReacValues <- reactiveValues(
+    #myReacValues$countsData <- user_inputs()
+    
+    output$readData <- renderText({
+      user_input()$mes
+    })# %>% bindEvent(input$startQC , ignoreInit = TRUE, ignoreNULL = TRUE)
+    
   ##### Preprocessing #####
-  
-  #read data
-  output$readData <- reactive({
-    #source("scripts/load_libraries.R", local=TRUE)
-    countsData <<- readData()
-   "Reading data completed"
-  }) %>% bindEvent(input$startQC, ignoreInit = TRUE, ignoreNULL = TRUE)
-  
-  #add metadata
-  output$paramsAddMetadata <- reactive({
-    if(length(input$typeOrganism) == 0 | length(input$typeGeneId) == 0){
-      ("You have to select the organism and gene IDs type")
-    }else{
-      metaData <<- createMetadata(countsData,input$typeOrganism, input$typeGeneId)
-      "Metadata added."
-    }
-  }) %>% bindEvent(input$addMetadata, ignoreInit = TRUE, ignoreNULL = TRUE)
-  
-  #minimal filtering and save as an Rds object
-  output$initDataFilt<- reactive({
-    # Keep cells with nUMI greater than 100
-    idx <- which(metaData$nUMI > 100)
-    
-    # Extract the counts for those cells
-    counts_c <- countsData[, idx]
-    
-    # Extract the metadata for those cells
-    metadata_c <- metaData[idx,]
-    
-    # Save data to single cell experiment variable
-    se <<- SingleCellExperiment(assays=list(counts=counts_c), 
-                               colData = metadata_c)
-    #remove countsData and metaData since they are stored in se object
-    rm(list=c("countsData", "metaData"), envir = .GlobalEnv)
-    
-    #and delete initial csv or rds file
-   
-    if (count.matrix) {
-      if(seurat){
-        if(input$testData==1){
-          NULL
+    #add metadata and update counts, sometimes we have to subset the count.matrix because we don't have matche between gene names and ensembl IDs
+    calc_metadata <- reactive({
+      if(input$testData == 1){#test dataset
+        countsData <<- user_input()$counts
+        c(createMetadata(countsData= user_input()$counts,"Mus musculus", TRUE),
+          mes = "Metadata added")
+        
+      }else if(input$typeData == 1 | input$typeData == 3){#count.matrix or rds
+        if(length(input$typeOrganism) == 0 | length(input$typeGeneId) == 0){
+          #output$paramsAddMetadata <- renderText(
+          message("You have to select the organism and/or gene IDs type")
+          #)
         }else{
-        file.remove(input$rdsFile$datapath)
-        rm(list="inputFile", envir = .GlobalEnv)
-      }}else{file.remove(input$csvFile$datapath)
-        rm(list="inputFile", envir = .GlobalEnv)}
-    }
+          
+          #my_metadata <<- createMetadata(countsData = user_input()$counts,input$typeOrganism, input$typeGeneId)
+           c(createMetadata(countsData = user_input()$counts,input$typeOrganism, input$typeGeneId),
+                        mes = "Metadata added")
+          #metadata <- c(metadata = my_metadata$metadata,
+              #          counts_metadata = my_metadata$meta_counts,
+                        #cells = my_metadata$metadata$cells,
+                        #nUMI = my_metadata$metadata$nUMI,
+                        #nGene = my_metadata$metadata$nGene,
+                        #log10GenesPerUMI = my_metadata$metadata$log10GenesPerUMI,
+                        #sample =  my_metadata$metadata$sample,
+                        #mtUMI = my_metadata$metadata$mtUMI,
+                        #mitoRatio = my_metadata$metadata$mitoRatio,
+                        #rbcUMI = my_metadata$metadata$rbcUMI,
+                        #rbcRatio = my_metadata$metadata$rbcRatio,
+                        #mes = "Metadata added")
+        }
+      }else{#10X
+        if(length(input$typeOrganism) == 0){
+          # output$paramsAddMetadata <- renderText(
+          message("You have to select the organism")
+          #)
+        }else{
+          c(createMetadata(countsData = user_input()$counts,input$typeOrganism, FALSE),
+            mes = "Metadata added")
+          #countsData <- myReacValues$countsData #user_input()$counts
+          #my_metadata <- createMetadata(countsData = user_input()$counts,input$typeOrganism, FALSE)
+          #metadata <- c(metadata = my_metadata$metadata,
+                      #  counts_metadata = my_metadata$meta_counts,
+                        #cells = my_metadata$metadata$cells,
+                        #nUMI = my_metadata$metadata$nUMI,
+                        #nGene = my_metadata$metadata$nGene,
+                        #log10GenesPerUMI = my_metadata$metadata$log10GenesPerUMI,
+                        #sample =  my_metadata$metadata$sample,
+                        #mtUMI = my_metadata$metadata$mtUMI,
+                        #mitoRatio = my_metadata$metadata$mitoRatio,
+                        #rbcUMI = my_metadata$metadata$rbcUMI,
+                        #rbcRatio = my_metadata$metadata$rbcRatio,
+                       # mes = "Metadata added")
+        }
+        
+      }
+    })%>% bindEvent(input$addMetadata , ignoreInit = TRUE, ignoreNULL = TRUE)
     
-    "Data filtered"
-  }) %>% bindEvent(input$initFiltering, ignoreInit = TRUE, ignoreNULL = TRUE)
+    output$paramsAddMetadata <- renderText({
+        calc_metadata()$mes
+      #calc_metadata_testing <<-calc_metadata() ########################################################ATTENTION#############
+
+    })# %>% bindEvent(input$addMetadata , ignoreInit = TRUE, ignoreNULL = TRUE)
+    
+    #minimal filtering
+    calc_se <- reactive({
+      metaData <- calc_metadata() 
+      # Keep cells with nUMI greater than 100
+      idx <- which(metaData$nUMI > 100) 
+      
+      # Extract the counts for those cells
+      counts_c <- metaData$counts[, idx] 
+      
+      # Extract the metadata for those cells
+      metadata_c <- lapply(metaData[1:10], "[", idx)  
+      #metadata_c <- metaData[idx,]
+      
+      #my_se <<- SingleCellExperiment(assays=list(counts=counts_c), 
+      #                              colData = metadata_c)
+      # Save data to single cell experiment variable
+      c(se = SingleCellExperiment::SingleCellExperiment(assays=list(counts=counts_c), 
+                                        colData = metadata_c),  
+              mes = "Data filtered")
+    })%>% bindEvent(input$initFiltering, ignoreInit = TRUE, ignoreNULL = TRUE)
+    
+    output$initDataFilt<- renderText({
+      calc_se()$mes
+      #my_se<<- calc_se()$se
+      }) #%>% bindEvent(input$initFiltering, ignoreInit = TRUE, ignoreNULL = TRUE)
+    
+    #save and download as rds
+    output$initDownload <- 
+      downloadHandler(
+        filename = function() {
+          paste0("raw_se_",  Sys.Date(), ".rds")
+        },
+        content = function(file) {
+          saveRDS(calc_se()$se, file)
+        }
+      )
   
-  #save and download as rds
-  #output$dataNameValidation <- reactive({
-    #if(input$dataName=="Enter a name..."){
-      #"Please provide a name"
-    #}else if (input$dataName==""){
-     # "Please provide a name"
-    #}else{
-      ## Create .RData object to load at any time
-      #saveRDS(se, paste0("raw_se_", input$dataName, ".rds"))
-      #"Saved"
-    #}
-  #}) %>% bindEvent(input$initDownload , ignoreInit = TRUE, ignoreNULL = TRUE)
-  
-  output$initDownload <- 
-    downloadHandler(
-    filename = function() {
-      paste0("raw_se_",  Sys.Date(), ".rds")
-    },
-    content = function(file) {
-      saveRDS(se, file)
-    }
-  )
     
   ###### QC routine #####
   
   #create metrics
-  output$createdMetrics <- reactive({
-    metrics <<- colData(se) %>%
-      as.data.frame
-      "Metrics created"
+    calc_metrics <- reactive({
+      c(as.data.frame(colData(calc_se()$se)),
+        mes = "Metrics created")
+    })%>% bindEvent(input$makeMetrics , ignoreInit = TRUE, ignoreNULL = TRUE)
     
-  }) %>% bindEvent(input$makeMetrics , ignoreInit = TRUE, ignoreNULL = TRUE)
+  output$createdMetrics <- renderText({
+    calc_metrics()$mes
+
+  }) #%>% bindEvent(input$makeMetrics , ignoreInit = TRUE, ignoreNULL = TRUE)
   
   #Update slider max values when metrics object is created
   #metrics_created <- reactive({get(metrics)})
@@ -179,110 +246,133 @@ function(input, output, session){
   
   #number of UMIs per cell
   #update slider min and max values
-
+  
+  
+  #output$myControl <- renderUI({
+  #  metrics <<- calc_metrics()$metrics
+   # sliderInput("nUMIs", "Number of UMIs:",
+    #            min = 0, max = max(metrics$nUMI), value = c(min(metrics$nUMI),max(metrics$nUMI)), step = 10)
+  #})%>% bindEvent(input$makeNBUMIs , ignoreInit = TRUE, ignoreNULL = TRUE)
+  
   observe({
     updateSliderInput(session,"nUMIs", "Number of UMIs:",
-                      min = 0, max = max(metrics$nUMI), value = c(min(metrics$nUMI),max(metrics$nUMI)), step = 10)
+                      min = 0, max = max(calc_metrics()$nUMI), value = c(min(calc_metrics()$nUMI),max(calc_metrics()$nUMI)), step = 10)
   }) %>% bindEvent(input$makeNBUMIs , ignoreInit = TRUE, ignoreNULL = TRUE)
   
+  
+  
   output$UMIsPlot <- renderPlot({
-    
-      createUMIsPlot(metrics, input$nUMIs[1], input$nUMIs[2])
+      createUMIsPlot(calc_metrics()[1:10], input$nUMIs[1], input$nUMIs[2])
 
   })%>% bindEvent(c(input$makeNBUMIs, input$nUMIs) , ignoreInit = TRUE, ignoreNULL = TRUE)
   
   #nGenes histogram
   observe({
     updateSliderInput(session, "nGenes", "Number of genes:",
-                      min = 0, max = max(metrics$nGene), value = c(min(metrics$nGene),max(metrics$nGene)), step = 10)
+                      min = 0, max = max(calc_metrics()$nGene), value = c(min(calc_metrics()$nGene),max(calc_metrics()$nGene)), step = 10)
   }) %>% bindEvent(input$makeNBgenesHist , ignoreInit = TRUE, ignoreNULL = TRUE)
   
   output$GenesHistPlot<- renderPlot({
-    createGenesHistPlot(metrics, input$nGenes[1], input$nGenes[2])
+    createGenesHistPlot(calc_metrics()[1:10], input$nGenes[1], input$nGenes[2])
 
   })%>% bindEvent(c(input$makeNBgenesHist, input$nGenes) , ignoreInit = TRUE, ignoreNULL = TRUE)
 
   #nGenes boxplot
   output$GenesBoxPlot <- renderPlot({
-    
-    createGenesBoxPlot(metrics)
+
+    createGenesBoxPlot(calc_metrics()[1:10])
     
   })%>% bindEvent(c(input$makeNBgenesBoxPlot) , ignoreInit = TRUE, ignoreNULL = TRUE)
   
   #UMIs vs nGenes with mitoRatio
   observe({
+
     updateSliderInput(session,"nUMIsVSnGenes", "Genes detected:",
-                      min = 0, max = max(metrics$nGene), value = c(min(metrics$nGene),max(metrics$nGene)), step = 10)
+                      min = 0, max = max(calc_metrics()$nGene), value = c(min(calc_metrics()$nGene),max(calc_metrics()$nGene)), step = 10)
   })%>% bindEvent(input$makeUMIsGenes , ignoreInit = TRUE, ignoreNULL = TRUE)
   
   output$UMIsGenesPlot <- renderPlot({
     
-    createUMIsGenesPlot(metrics, input$nUMIsVSnGenes[1], input$nUMIsVSnGenes[2])
+    createUMIsGenesPlot(calc_metrics()[1:10], input$nUMIsVSnGenes[1], input$nUMIsVSnGenes[2])
     
   })%>% bindEvent(c(input$makeUMIsGenes, input$nUMIsVSnGenes) , ignoreInit = TRUE, ignoreNULL = TRUE)
  
   
   #UMIs vs nGenes with hemoRatio
   observe({
+    
     updateSliderInput(session,"nUMIsVSnGenesRBC", "Genes detected:",
-                      min = 0, max = max(metrics$nGene), value = c(min(metrics$nGene),max(metrics$nGene)), step = 10)
+                      min = 0, max = max(calc_metrics()$nGene), value = c(min(calc_metrics()$nGene),max(calc_metrics()$nGene)), step = 10)
   })%>% bindEvent(input$makeUMIsGenesRBC , ignoreInit = TRUE, ignoreNULL = TRUE)
   
   output$UMIsGenesPlotRBC <- renderPlot({
     
-    createUMIsGenesPlotRBC(metrics, input$nUMIsVSnGenesRBC[1], input$nUMIsVSnGenesRBC[2])
+    createUMIsGenesPlotRBC(calc_metrics()[1:10], input$nUMIsVSnGenesRBC[1], input$nUMIsVSnGenesRBC[2])
       
   })%>% bindEvent(c(input$makeUMIsGenesRBC, input$nUMIsVSnGenesRBC) , ignoreInit = TRUE, ignoreNULL = TRUE)
   
   #plot mitoRatio
   observe({
+    
     updateSliderInput(session,"mitoRatio", "Mitochondrial ratio:",
-                      min = 0, max = round(max(metrics$mitoRatio), digits = 2), value = c(round(min(metrics$mitoRatio),digits = 2),round(max(metrics$mitoRatio), digits = 2)), step = 0.01)
+                      min = 0, max = round(max(calc_metrics()$mitoRatio), digits = 2), value = c(round(min(calc_metrics()$mitoRatio),digits = 2),round(max(calc_metrics()$mitoRatio), digits = 2)), step = 0.01)
   })%>% bindEvent(input$makemitoRatio , ignoreInit = TRUE, ignoreNULL = TRUE)
   
   output$mitoRatioPlot <- renderPlot({
     
-    createmitoRatioPlot(metrics, input$mitoRatio[1], input$mitoRatio[2])
+    createmitoRatioPlot(calc_metrics()[1:10], input$mitoRatio[1], input$mitoRatio[2])
     
   })%>% bindEvent(c(input$makemitoRatio, input$mitoRatio) , ignoreInit = TRUE, ignoreNULL = TRUE)
   
   #plot hemoRatio
   observe({
+    
     updateSliderInput(session,"rbcRatio", "Hemoglobins ratio:",
-                      min = 0, max = round(max(metrics$rbcRatio), digits = 2), value = c(round(min(metrics$rbcRatio),digits = 2),round(max(metrics$rbcRatio), digits = 2)), step = 0.01)
+                      min = 0, max = round(max(calc_metrics()$rbcRatio), digits = 2), value = c(round(min(calc_metrics()$rbcRatio),digits = 2),round(max(calc_metrics()$rbcRatio), digits = 2)), step = 0.01)
   })%>% bindEvent(input$makerbcRatio , ignoreInit = TRUE, ignoreNULL = TRUE)
   
   output$rbcRatioPlot <- renderPlot({
     
-    createrbcRatioPlot(metrics, input$rbcRatio[1], input$rbcRatio[2])
+    createrbcRatioPlot(calc_metrics()[1:10], input$rbcRatio[1], input$rbcRatio[2])
     
   })%>% bindEvent(c(input$makerbcRatio, input$rbcRatio) , ignoreInit = TRUE, ignoreNULL = TRUE)
   
   #Genes vs UMIs
   observe({
+    
     updateSliderInput(session,"novelty", "Genes detected per UMI:",
-                      min = 0, max = round(max(metrics$log10GenesPerUMI), digits = 2), value = round(min(metrics$log10GenesPerUMI),digits = 2), step = 0.01)
+                      min = 0, max = round(max(calc_metrics()$log10GenesPerUMI), digits = 2), value = round(min(calc_metrics()$log10GenesPerUMI),digits = 2), step = 0.01)
   })%>% bindEvent(input$makeNovelty , ignoreInit = TRUE, ignoreNULL = TRUE)
   
   output$noveltyPlot <- renderPlot({
-    createnoveltyPlot(metrics, input$novelty[1], input$novelty[2])
+    
+    createnoveltyPlot(calc_metrics()[1:10], input$novelty[1], input$novelty[2])
   })%>% bindEvent(input$makeNovelty, input$novelty, ignoreInit = TRUE, ignoreNULL = TRUE)
   
   #plot scaterPlot
+  scater_plot <- reactive({
+    createlibraryPlot(calc_se()$se)
+  })%>%bindEvent(input$makeLibrary, ignoreInit = TRUE, ignoreNULL = TRUE)
+  
+  
   output$libraryPlot <- renderPlot({
-    createlibraryPlot(se)
-  })%>% bindEvent(input$makeLibrary, ignoreInit = TRUE, ignoreNULL = TRUE)
+    scater_plot()
+  })#%>% bindEvent(input$makeLibrary, ignoreInit = TRUE, ignoreNULL = TRUE)
   
   #plot highest expressed features
+  highest_expr_plot <- reactive({
+    createhighExprPlot(calc_se()$se)
+  })%>%bindEvent(input$makeHighExpr, ignoreInit = TRUE, ignoreNULL = TRUE)
+  
   output$highExprPlot <- renderPlot({
-    createhighExprPlot(se)
-  })%>% bindEvent(input$makeHighExpr, ignoreInit = TRUE, ignoreNULL = TRUE)
+    highest_expr_plot()
+  })#%>% bindEvent(input$makeHighExpr, ignoreInit = TRUE, ignoreNULL = TRUE)
   
   #zoom on plot
   observeEvent(input$zoomhighExprPlot, {
     showModal(modalDialog(
       renderPlot({
-        createhighExprPlot(se)
+        highest_expr_plot()
         },
         width = 600,
         height = 1200,
@@ -294,6 +384,21 @@ function(input, output, session){
   })
   
   ###### Filtering thresholds #####
+  
+  #update filtering thresholds when metrics are computed to avoid wrong initial values as input to plots
+  observe({
+    updateNumericInput(session, "minUMIsPerCell", value = min(calc_metrics()$nUMI))
+    updateNumericInput(session, "maxUMIsPerCell", value = max(calc_metrics()$nUMI))
+    updateNumericInput(session, "minGenesPerCell", value = min(calc_metrics()$nGene))
+    updateNumericInput(session, "maxGenesPerCell", value = max(calc_metrics()$nGene))
+    updateNumericInput(session, "minMitoPerCell", value = round(min(calc_metrics()$mitoRatio),digits = 2))
+    updateNumericInput(session, "maxMitoPerCell", value = round(max(calc_metrics()$mitoRatio),digits = 2))
+    updateNumericInput(session, "minRbcPerCell", value = round(min(calc_metrics()$rbcRatio),digits = 2))
+    updateNumericInput(session, "maxRbcPerCell", value = round(max(calc_metrics()$rbcRatio),digits = 2))
+    updateNumericInput(session, "noveltyPerCell", value = round(min(calc_metrics()$log10GenesPerUMI),digits = 2))
+    
+  }) %>% bindEvent(input$makeMetrics, ignoreInit = TRUE, ignoreNULL = TRUE)
+  
   
   #update filtering thresholds from sliders upon user request via action button "updateThresholds"
   observe({
@@ -321,8 +426,9 @@ function(input, output, session){
   output$noveltyPerCellThreshold <- renderText({ paste0("We'll keep cells with number of genes detected per UMI per cell (novelty) above: ", input$noveltyPerCell) })
   
   #QC Filtering
-  output$QCDataFilt<- reactive({
-    keep_index <<- metrics %>%
+  se_c <- reactive({
+    metrics <- as.data.frame(calc_metrics()[1:10])
+    filt_cells <-    metrics %>%
       dplyr::filter(nUMI > input$minUMIsPerCell , 
                     nUMI < input$maxUMIsPerCell,
                     nGene > input$minGenesPerCell,
@@ -334,12 +440,25 @@ function(input, output, session){
                     rbcRatio < input$maxRbcPerCell
       ) %>% 
       pull(cells)
+    my_se_c <- calc_se()$se
+    #return filtered data
+   c(se = my_se_c[ ,filt_cells],
+     mes= "Data filtered")
     
-    # Subset the cells to only include those that meet the thresholds specified and save subset to new metrics variable
-   metrics_clean <<- colData(se[ ,keep_index]) %>%
-      as.data.frame()
-    "Data filtered"
-  })%>% bindEvent(input$QCFiltering, ignoreInit = TRUE, ignoreNULL = TRUE)
+  })%>% bindEvent(input$QCFiltering , ignoreInit = TRUE, ignoreNULL = TRUE)
+  
+  output$QCDataFilt <- reactive({
+    se_c()$mes
+  })
+  # Save subset to new metrics variable
+  metrics_clean <- reactive({
+    c(as.data.frame(colData(se_c()$se)),
+    mes = "Metrics recomputed")
+  })%>% bindEvent(input$filt_metrics, ignoreInit = TRUE, ignoreNULL = TRUE)
+  
+  output$metricsFilt<- renderText({
+    metrics_clean()$mes
+  })
   
   #save and download as rds
   output$QCDownload <- 
@@ -348,68 +467,60 @@ function(input, output, session){
         paste0("filtered_se_",  Sys.Date(), ".rds")
       },
       content = function(file) {
-        saveRDS(se[ ,keep_index], file)
+       # se= calc_se()$se
+       # keep_index = keep_index()$keep_index
+        saveRDS(se_c()$se, file)
       }
     )
-  #output$dataNameValidationQC <- reactive({
-   # if(input$dataNameQC=="Enter a name..."){
-   #   "Please provide a name"
-  #  }else if (input$dataNameQC==""){
-   #   "Please provide a name"
-   # }else{
-      # Create .RData object to load at any time
-   #   saveRDS(se[ ,keep_index], paste0("se_filtered_", input$dataNameQC, ".rds"))
-   #   "Saved"
-   # }
- # }) %>% bindEvent(input$QCDownload , ignoreInit = TRUE, ignoreNULL = TRUE)
+
   
   ##### Redraw Plots with filtered data #####
   #UMIs Plot
   output$UMIsPlotFiltered <- renderPlot({
     
-    createUMIsPlot(metrics_clean, min(metrics_clean$nUMI),max(metrics_clean$nUMI))
+    createUMIsPlot(metrics_clean()[1:10], min(metrics_clean()$nUMI),max(metrics_clean()$nUMI))
     
   })%>% bindEvent(input$redrawPlots , ignoreInit = TRUE, ignoreNULL = TRUE)
   
   #nGenes histogram
   output$GenesHistPlotFiltered <- renderPlot({
     
-    createGenesHistPlot(metrics_clean, min(metrics_clean$nGene),max(metrics_clean$nGene))
+    createGenesHistPlot(metrics_clean()[1:10], min(metrics_clean()[1:10]$nGene),max(metrics_clean()[1:10]$nGene))
     
   })%>% bindEvent(input$redrawPlots , ignoreInit = TRUE, ignoreNULL = TRUE)
   
   #nGenes Boxplot
   output$GenesBoxPlotFiltered <- renderPlot({
     
-    createGenesBoxPlot(metrics_clean)
+    createGenesBoxPlot(metrics_clean()[1:10])
     
   })%>% bindEvent(input$redrawPlots , ignoreInit = TRUE, ignoreNULL = TRUE)
   
   #UMIs vs genes with mitoRatio
   output$UMIsGenesPlotFiltered <- renderPlot({
     
-    createUMIsGenesPlot(metrics_clean, min(metrics_clean$nGene), max(metrics_clean$nGene))
+    createUMIsGenesPlot(metrics_clean()[1:10], min(metrics_clean()[1:10]$nGene), max(metrics_clean()[1:10]$nGene))
     
   })%>% bindEvent(input$redrawPlots , ignoreInit = TRUE, ignoreNULL = TRUE)
   
   #UMIs vs genes with rbcRatio
   output$UMIsGenesPlotRBCFiltered <- renderPlot({
     
-    createUMIsGenesPlotRBC(metrics_clean, min(metrics_clean$nGene), max(metrics_clean$nGene))
+    createUMIsGenesPlotRBC(metrics_clean()[1:10], min(metrics_clean()[1:10]$nGene), max(metrics_clean()[1:10]$nGene))
     
   })%>% bindEvent(input$redrawPlots , ignoreInit = TRUE, ignoreNULL = TRUE)
   
   #mitoRatio
   output$mitoRatioPlotFiltered <- renderPlot({
     
-    createmitoRatioPlot(metrics_clean, min(metrics_clean$mitoRatio), max(metrics_clean$mitoRatio))
+    createmitoRatioPlot(metrics_clean()[1:10], min(metrics_clean()[1:10]$mitoRatio), max(metrics_clean()[1:10]$mitoRatio))
     
   })%>% bindEvent(input$redrawPlots , ignoreInit = TRUE, ignoreNULL = TRUE)
   
   #rbcRatio
   output$rbcRatioPlotFiltered <- renderPlot({
     
-    createrbcRatioPlot(metrics_clean, min(metrics_clean$rbcRatio), max(metrics_clean$rbcRatio))
+    createrbcRatioPlot(metrics_clean()[1:10], min(metrics_clean()[1:10]$rbcRatio), max(metrics_clean()[1:10]$rbcRatio))
     
   })%>% bindEvent(input$redrawPlots , ignoreInit = TRUE, ignoreNULL = TRUE)
   
@@ -417,29 +528,33 @@ function(input, output, session){
   #novelty
   output$noveltyPlotFiltered <- renderPlot({
     
-    createnoveltyPlot(metrics_clean, min(metrics_clean$log10GenesPerUMI), max(metrics_clean$log10GenesPerUMI))
+    createnoveltyPlot(metrics_clean()[1:10], min(metrics_clean()[1:10]$log10GenesPerUMI), max(metrics_clean()[1:10]$log10GenesPerUMI))
     
   })%>% bindEvent(input$redrawPlots , ignoreInit = TRUE, ignoreNULL = TRUE)
   
   #library plot
   output$libraryPlotFiltered <- renderPlot({
-    
-    createlibraryPlot(se[ ,keep_index])
+
+    createlibraryPlot(se_c()$se)
     
   })%>% bindEvent(input$redrawPlots , ignoreInit = TRUE, ignoreNULL = TRUE)
   
   #plot highest expressed genes
+  #plot highest expressed features
+  highest_expr_plot_filtered <- reactive({
+
+    createhighExprPlot(se_c()$se)
+  })%>%bindEvent(input$redrawPlots , ignoreInit = TRUE, ignoreNULL = TRUE)
+  
   output$highExprPlotFiltered <- renderPlot({
-    
-    createhighExprPlot(se[ ,keep_index])
-    
-  })%>% bindEvent(input$redrawPlots , ignoreInit = TRUE, ignoreNULL = TRUE)
+    highest_expr_plot_filtered()
+  })#%>% bindEvent(input$makeHighExpr, ignoreInit = TRUE, ignoreNULL = TRUE)
   
   #zoom on plot
   observeEvent(input$zoomhighExprPlotFiltered, {
     showModal(modalDialog(
       renderPlot({
-        createhighExprPlot(se[ ,keep_index])
+        highest_expr_plot_filtered()
       },
       width = 600,
       height = 1200,
@@ -454,7 +569,7 @@ function(input, output, session){
   
   #Normalize data
   output$normalizeData <- reactive({
-    loaded.dataSO <- CreateSeuratObject(counts = se[ ,keep_index]@assays@data@listData$counts, project = "sample")
+    loaded.dataSO <- CreateSeuratObject(counts = se_c()$se@assays@data@listData$counts, project = "sample")
     loaded.dataSO <- NormalizeData(loaded.dataSO)#, normalization.method = "LogNormalize", scale.factor = 10000)
     #Identification of highly variable features (feature selection) *
     loaded.dataSO <- FindVariableFeatures(loaded.dataSO, selection.method = "vst", nfeatures = 2000)
@@ -550,13 +665,13 @@ function(input, output, session){
   gen_cluster_res <- reactive({
     loaded.dataSO.combined.markerstop<<- top_mark_def()
     annotateMyClusters(input$annotLibrary, input$typeOrganism, loaded.dataSO.combined.markerstop, loaded.dataSO.combined.no.cluster)
-  }) #%>% bindEvent(input$annotClusters , ignoreInit = TRUE, ignoreNULL = TRUE)
+  }) %>% bindEvent(input$annotClusters , ignoreInit = TRUE, ignoreNULL = TRUE)
   
    output$anot_completed <- reactive({
     "Annotation started"
     gen_cluster_res <- gen_cluster_res()
    "Annotation completed"
-  }) %>% bindEvent(input$annotClusters , ignoreInit = TRUE, ignoreNULL = TRUE)
+  }) #%>% bindEvent(input$annotClusters , ignoreInit = TRUE, ignoreNULL = TRUE)
   
   
   #update selectInput for gene clusters 
@@ -657,10 +772,10 @@ function(input, output, session){
   #})%>% bindEvent(input$corData , ignoreInit = TRUE, ignoreNULL = TRUE)
   
   observe({
-    validate(need(try(keep_index), "It seems you haven't filtered your data yet."))
-    validate(need(try(se), "You'll have to complete the preprocessing steps before running a correlation analysis."))
-    validate(need(try(loaded.dataSO.combined <<- gen_cluster_res()[1][[1]]), "You have to complete gene cluster annotation steps first!"))
-    validate(need(try(loaded.dataSO.combined.no.cluster), "You have to complete gene cluster annotation steps first!"))
+    #validate(need(try(keep_index), "It seems you haven't filtered your data yet."))
+    #validate(need(try(myReacValues$se), "You'll have to complete the preprocessing steps before running a correlation analysis."))
+    #validate(need(try(loaded.dataSO.combined <<- gen_cluster_res()[1][[1]]), "You have to complete gene cluster annotation steps first!"))
+    #validate(need(try(loaded.dataSO.combined.no.cluster), "You have to complete gene cluster annotation steps first!"))
     
     if(input$corData=="clustered"){
       updateSelectInput(session, "targetGenesCluster",
@@ -670,7 +785,7 @@ function(input, output, session){
     }
     updateSelectizeInput(session, "targetGenes",
                          label = "'Bait' gene to run correlation analysis with",
-                         choices =  array(se@assays@data@listData$counts@Dimnames[1][[1]]), server = TRUE)
+                         choices =  array(calc_se()$se@assays@data@listData$counts@Dimnames[1][[1]]), server = TRUE)
   })%>% bindEvent(input$corData , ignoreInit = TRUE, ignoreNULL = TRUE)
   
 
@@ -684,11 +799,11 @@ function(input, output, session){
     }else{
     if(input$corData=="filtered"){
       "Running analysis with filtered data"
-      iRNA_cor_tables <<- iRNA(se[ ,keep_index], input$method, input$alpha, input$geneSparsity, input$targetGenes, input$correlation_threshold)
+      iRNA_cor_tables <<- iRNA(se_c()$se, input$method, input$alpha, input$geneSparsity, input$targetGenes, input$correlation_threshold)
       
     }else if(input$corData=="unfiltered"){
       "Running analysis with raw data"
-      iRNA_cor_tables <<- iRNA(se, input$method, input$alpha, input$geneSparsity, input$targetGenes, input$correlation_threshold)
+      iRNA_cor_tables <<- iRNA(calc_se()$se, input$method, input$alpha, input$geneSparsity, input$targetGenes, input$correlation_threshold)
     }else{
       cat(paste0("Running analysis with cell type cluster:", input$selectCluster))
       iRNA_cor_tables <<- iRNA_cluster(loaded.dataSO.combined, input$method, input$alpha, input$geneSparsity, input$targetGenes, input$correlation_threshold, input$selectCluster)
