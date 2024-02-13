@@ -1,4 +1,4 @@
-#### scRNA-Seq: An end-user online tool for single cell RNA-seq data analysis featuring gene correlation and data filtering
+#### scRNA-Seq: An end-user online tool for single cell RNA-Seq data analysis featuring gene correlation and data filtering
 
 ##### Highlights
 * Single cell RNA-Seq analysis utilises feature selection, to classify and characterise cell clusters withing a heterogeneous cell population. To our knowledge, there is no public pipeline to interrogate this plethora of data to identify by co-expression correlation the putative unknown or additional function of a specific gene.
