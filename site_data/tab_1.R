@@ -23,7 +23,7 @@ tab1<-     tabPanel("Data input/preprocessing",
                         ),
                         
                         conditionalPanel(
-                          condition = "input.typeData == 1",
+                          condition = "input.typeData == 1 & input.testData == 2",
                           fileInput(inputId="csvFile", NULL, buttonLabel = "Upload .csv or .tsv",
                                     multiple = FALSE, accept = c(".csv", ".tsv")),
                           textOutput("uploadCsvValidation"),
@@ -36,7 +36,7 @@ tab1<-     tabPanel("Data input/preprocessing",
                         
                         
                         conditionalPanel(
-                          condition = "input.typeData == 2",
+                          condition = "input.typeData == 2 & input.testData == 2",
                           #radioButtons(inputId= "type10X", label = NULL,
                           #             choices = c("Locally stored data"= 1, "Download from GEO" = 2), selected = character(0), inline=TRUE)
                           helpText("You can provide .mtx or gzipped versions (.mtx.gz)"),
@@ -52,6 +52,7 @@ tab1<-     tabPanel("Data input/preprocessing",
                           #textInput(inputId="genes10XInput", "Filename of genes", value = NULL),
                           
                           helpText("You can provide .tsv or gzipped versions (.tsv.gz)"),
+                          helpText("This file is optional, as we don't perform any analysis with barcodes"),
                           fileInput(inputId="barcodes10XInput", NULL, buttonLabel = "Upload barcodes",
                                     multiple = FALSE, accept = c(".tsv", ".tsv.gz")),
                           textOutput("uploadbarcodes10XValidation")
@@ -59,7 +60,7 @@ tab1<-     tabPanel("Data input/preprocessing",
                           ),
                         
                         conditionalPanel(
-                          condition = "input.typeData == 3",
+                          condition = "input.typeData == 3 & input.testData == 2",
                           fileInput(inputId="rdsFile", NULL, buttonLabel = "Upload .rds",
                                     multiple = FALSE, accept = ".rds"),
                           textOutput("uploadRdsValidation"),
@@ -67,20 +68,9 @@ tab1<-     tabPanel("Data input/preprocessing",
                                        choices = c("Gene names" = TRUE, "Ensembl IDs" = FALSE ), selected = character(0), inline=TRUE),
                           helpText("Note that in the case of 10X files we follow the Ensembl annotation")
                           ),
-                        
-                        
-                        
-                        #helpText("Data in a count matrix format: a table with cell-barcodes as columns and features as rows."),
-                        #helpText("Data in 10X format: a directory with 3 separate files for counts, features and barcodes."),
-                        
-                        #check user input
-                        #actionButton("checkInput", "Check your input"),
-                        
-                        #span(textOutput("uploadSummary"), style="color:dodgerblue"),
+
                         
                         ###### QC analysis and  plots #####
-                        
-                        #textOutput("inputParameters"),
                         
                         #read data
                         actionButton("startQC", "Read data"),

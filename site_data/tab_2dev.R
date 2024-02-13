@@ -166,7 +166,7 @@ tab2 <-tabPanel("Quality Control Plots",
                condition="input.makemitoRatio>0",
                helpText("You can slide the vertical lines on the plot by changing the values below"),
                sliderInput("mitoRatio", "Mitochondrial ratio:",
-                           min = 0, max = 1, value = c(0,1), step = 0.01)
+                           min = 0, max = 1, value = c(0,1), step = 0.0001)
              )
              
            )),
@@ -192,7 +192,7 @@ tab2 <-tabPanel("Quality Control Plots",
                condition="input.makerbcRatio>0",
                helpText("You can slide the vertical lines on the plot by changing the values below"),
                sliderInput("rbcRatio", "Hemoglobins ratio:",
-                           min = 0, max = 1, value = c(0,1), step = 0.01)
+                           min = 0, max = 1, value = c(0,1), step = 0.0001)
              )
              
            )),
@@ -290,10 +290,10 @@ tab2 <-tabPanel("Quality Control Plots",
              numericInput("maxUMIsPerCell", "Max number of UMIs detected per cell:", 1000, min = 0, max = as.integer(.Machine$integer.max)),
              numericInput("minGenesPerCell", "Min number of genes detected per cell:", 1000, min = 0, max = as.integer(.Machine$integer.max)),
              numericInput("maxGenesPerCell", "Max number of genes detected per cell:", 1000, min = 0, max = as.integer(.Machine$integer.max)),
-             numericInput("minMitoPerCell", "Min mitochondrial ratio detected per cell:", 1000, min = 0, max = as.integer(.Machine$integer.max), step = 0.01),
-             numericInput("maxMitoPerCell", "Max mitochondrial ratio detected per cell:", 1000, min = 0, max = as.integer(.Machine$integer.max), step = 0.01),
-             numericInput("minRbcPerCell", "Min hemoglobin ratio detected per cell:", 1000, min = 0, max = as.integer(.Machine$integer.max), step = 0.01),
-             numericInput("maxRbcPerCell", "Max hemoglobin ratio detected per cell:", 1000, min = 0, max = as.integer(.Machine$integer.max), step = 0.01),
+             numericInput("minMitoPerCell", "Min mitochondrial ratio detected per cell:", 1000, min = 0, max = as.integer(.Machine$integer.max), step = 0.0001),
+             numericInput("maxMitoPerCell", "Max mitochondrial ratio detected per cell:", 1000, min = 0, max = as.integer(.Machine$integer.max), step = 0.0001),
+             numericInput("minRbcPerCell", "Min hemoglobin ratio detected per cell:", 1000, min = 0, max = as.integer(.Machine$integer.max), step = 0.0001),
+             numericInput("maxRbcPerCell", "Max hemoglobin ratio detected per cell:", 1000, min = 0, max = as.integer(.Machine$integer.max), step = 0.0001),
              numericInput("noveltyPerCell", "Min log10GenesPerUMI per cell:", 1000, min = 0, max = as.integer(.Machine$integer.max), step = 0.01)
              
            )),
@@ -322,8 +322,7 @@ tab2 <-tabPanel("Quality Control Plots",
                     #   value = "Enter a name..."),
              helpText(strong("You can download the Rds object")),
              downloadButton("QCDownload", 'Save Rds object')
-             #actionButton("QCDownload", 'Save Rds object'),
-             #span(textOutput("dataNameValidationQC")%>% withSpinner(), style = "color:dodgerblue"),
+
              
            ),
            wellPanel(

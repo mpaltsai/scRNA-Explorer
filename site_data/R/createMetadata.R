@@ -10,11 +10,20 @@ createMetadata <- function(countsData, a, b){
   organismName = a
   gene.name = b
 
-  
   if(organismName == "Mus musculus"){
     load("annotations_mmus.Rda")
+    if(identical(grep("ENSMUSG",rownames(countsData)), integer(0)) ){
+      gene.name = TRUE
+    }else{
+      gene.name=FALSE
+    }
   }else{
     load("annotations_hsap.Rda")
+    if(identical(grep("ENSG",rownames(countsData)), integer(0)) ){
+      gene.name = TRUE
+    }else{
+      gene.name=FALSE
+    }
   }
   # Connect to AnnotationHub
   #ah <- AnnotationHub(localHub=FALSE)
@@ -37,16 +46,19 @@ createMetadata <- function(countsData, a, b){
   #annotations <- annotations %>%
    # dplyr::select(gene_id, gene_name, gene_biotype, seq_name, description, entrezid)
   
+  #check for duplicates
+  countsData <- countsData[which(!duplicated(rownames(countsData))),]
+ 
+  #check for NAs and "" in feature names and subset matrix
+  if(length(which(is.na(rownames(countsData))))!=0 | length(which(rownames(countsData)==""))!=0){
+    countsData <- countsData[which(!is.na(rownames(countsData))),]
+    countsData <- countsData[which(rownames(countsData)!=""),]
+    warning("NAs or empty names present as feature names")
+  }
+   
   # Extract IDs for mitochondrial genes and hemoglobins
-  
-  #First check if mitochondrial genes annotations are defined as "MT" or "mt"
- #no need to do this, it is "MT" for both organims in annotations$seq_name
-  #if (identical(grep("mt",unique(annotations$seq_name)), integer(0))){
     name_init <- "MT"
-  #}else{
-  # name_init <- "mt"
- # }
-  
+ 
   if(gene.name){
     mt <- annotations %>% 
       dplyr::filter(seq_name == name_init) %>%
