@@ -178,7 +178,7 @@ function(input, output, session){
   
   #create metrics
     calc_metrics <- reactive({
-      need(try(calc_se()$se), "Please make the initial filtering before proceeding")
+      #need(try(calc_se()$se), "Please make the initial filtering before proceeding")
       my_se<- calc_se()$se
       c(as.data.frame(colData(calc_se()$se)),
         mes = "Metrics created")
@@ -507,7 +507,7 @@ function(input, output, session){
   
   #Normalize data
   output$normalizeData <- reactive({
-    counts_pre <<- calc_se()$se@assays@data@listData$counts
+    
    
     loaded.dataSO <<- tryCatch( 
       {
@@ -733,8 +733,10 @@ function(input, output, session){
     }else{
       cat(paste0("Running analysis with cell type cluster:", input$selectCluster))
       iRNA_cor_tables <<- tryCatch({
-        iRNA_cluster(loaded.dataSO.combined, input$method, input$alpha, input$geneSparsity, input$targetGenes, input$correlation_threshold, input$selectCluster)
-      },
+        iRNA_cluster(gen_cluster_res()[1][[1]], input$method, input$alpha, input$geneSparsity, input$targetGenes, input$correlation_threshold, input$selectCluster)
+        #iRNA_cluster(loaded.dataSO.combined, input$method, input$alpha, input$geneSparsity, input$targetGenes, input$correlation_threshold, input$selectCluster)
+        
+        },
       error = function(e) {
         message("Cell type clusters not computed yet. Please go back and run cell clustering steps")
         })

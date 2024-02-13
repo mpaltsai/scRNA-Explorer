@@ -277,6 +277,7 @@ iRNA <- function(sce, method, alpha, geneSparsity, targetGenes, correlation_thre
     #Not for shiny:suppressWarnings(write.table( cor.res[paste0(selectedGene, "_neg.cor")], f.path, sep=",", append=TRUE, col.names=NA))
   }
   #Not for shiny:end.cor.time = Sys.time()
+  message(paste0("\n ", "Selected gene is expressed among: ", sel.gene.percent, " of cells present in the set provided"))
   message("\n Correlation analysis completed")
   return(cor.res)
   

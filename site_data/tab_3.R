@@ -9,7 +9,7 @@ tab3 <- tabPanel("Gene correlation",
                      
                      numericInput(inputId="alpha", "At which level of significance (p value threshold)?", value = 0.05, min = 0.001, max = 1, step = 0.001),
                      radioButtons(inputId= "corData", label = "With which data?",
-                                  choices = c("Filtered"= "filtered", "Unfiltered" = "unfiltered", "Cell type cluster" = "clustered"), selected = character(0)),
+                                  choices = c("Filtered (across all cells)"= "filtered", "Unfiltered (across all cells)" = "unfiltered", "Cell type cluster" = "clustered"), selected = character(0)),
                       
                     selectizeInput(inputId="targetGenes", label="'Bait' gene to run correlation analysis with", choices=NULL),
                     helpText("Note that some genes will be excluded in the subsequent corelation analysis due to due to limited expression among single cells and/or filtering"),
