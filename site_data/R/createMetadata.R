@@ -12,18 +12,18 @@ createMetadata <- function(countsData, a, b){
 
   if(organismName == "Mus musculus"){
     load("annotations_mmus.Rda")
-    if(identical(grep("ENSMUSG",rownames(countsData)), integer(0)) ){
-      gene.name = TRUE
-    }else{
-      gene.name=FALSE
-    }
+    #if(identical(grep("ENSMUSG",rownames(countsData)), integer(0)) ){
+    #  gene.name = TRUE
+    #}else{
+    #  gene.name=FALSE
+    #}
   }else{
     load("annotations_hsap.Rda")
-    if(identical(grep("ENSG",rownames(countsData)), integer(0)) ){
-      gene.name = TRUE
-    }else{
-      gene.name=FALSE
-    }
+    #if(identical(grep("ENSG",rownames(countsData)), integer(0)) ){
+    #  gene.name = TRUE
+    #}else{
+    #  gene.name=FALSE
+    #}
   }
   # Connect to AnnotationHub
   #ah <- AnnotationHub(localHub=FALSE)
