@@ -28,10 +28,6 @@ tab1<-     tabPanel("Data input/preprocessing",
                                     multiple = FALSE, accept = c(".csv", ".tsv")),
                           textOutput("uploadCsvValidation"),
                           
-                          #set gene annotation parameteres
-                          radioButtons(inputId= "typeGeneId", label = "How are features (genes) annotated?",
-                                       choices = c("Gene names" = TRUE, "Ensembl IDs" = FALSE ), selected = character(0), inline=TRUE),
-                          helpText("Note that in the case of 10X files we follow the Ensembl annotation")
                           ),
                         
                         
@@ -64,9 +60,7 @@ tab1<-     tabPanel("Data input/preprocessing",
                           fileInput(inputId="rdsFile", NULL, buttonLabel = "Upload .rds",
                                     multiple = FALSE, accept = ".rds"),
                           textOutput("uploadRdsValidation"),
-                          radioButtons(inputId= "typeGeneId", label = "How are features (genes) annotated?",
-                                       choices = c("Gene names" = TRUE, "Ensembl IDs" = FALSE ), selected = character(0), inline=TRUE),
-                          helpText("Note that in the case of 10X files we follow the Ensembl annotation")
+                          
                           ),
 
                         
@@ -79,6 +73,10 @@ tab1<-     tabPanel("Data input/preprocessing",
                         
                         #add metadata
                         helpText("We have to add some metadata regarding the genes present in your dataset"),
+                        #set gene annotation parameteres
+                        radioButtons(inputId= "typeGeneId", label = "How are features (genes) annotated?",
+                                     choices = c("Gene names" = TRUE, "Ensembl IDs" = FALSE ), selected = character(0), inline=TRUE),
+                        helpText("Note that in the case of 10X files we follow the Ensembl annotation"),
                         #set organism parameteres
                         radioButtons(inputId= "typeOrganism", label = "Which organism comes your data from?",
                                      choices = c("Homo sapiens", "Mus musculus" ), selected = character(0), inline=TRUE),

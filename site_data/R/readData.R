@@ -13,6 +13,7 @@ readData <- function(count.matrix, seurat, inputFile, inputDir){
     
     
     if(seurat){
+      
       txi <- readRDS(input)
       #the following doesn't apply anymore (9/2023)
       #txi = txi@assays$RNA@counts
@@ -22,8 +23,9 @@ readData <- function(count.matrix, seurat, inputFile, inputDir){
       colnames(counts) <- colnames(txi)
       # Import genes
       rownames(counts) <- rownames(txi)
-      
+
       return(counts)
+      
       
       #txi <- readRDS(input)
       #the following doesn't apply anymore (9/2023)
@@ -45,7 +47,9 @@ readData <- function(count.matrix, seurat, inputFile, inputDir){
       # Import genes
       
       #rownames(counts) <-txi$V1
-      return(counts)
+
+        return(counts)
+      
     }
   }else{
     

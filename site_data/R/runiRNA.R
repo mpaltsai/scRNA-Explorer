@@ -1,4 +1,4 @@
-iRNA <- function(sce, method, alpha, geneSparsity, targetGenes, correlation_threshold){
+iRNA <- function(sce, method, alpha, geneSparsity, targetGenes, correlation_threshold, data_input){
   message('\nloading libraries, please wait')
   suppressPackageStartupMessages(library(stats))
   suppressPackageStartupMessages(library(psych))
@@ -64,7 +64,7 @@ iRNA <- function(sce, method, alpha, geneSparsity, targetGenes, correlation_thre
   genes.incl = genes.incl[[1]]
   genes.incl = toupper(genes.incl)
   
-  message("\nAnalysis will run with ", length(genes.incl), " gene(s): ", genes.incl, "\n")
+  message("\nAnalysis will run with ", length(genes.incl), " gene(s): ", genes.incl, " across " , data_input , " data", "\n")
   
   
   #message(cat(genes.incl, sep = " ", "\n"))
@@ -277,7 +277,7 @@ iRNA <- function(sce, method, alpha, geneSparsity, targetGenes, correlation_thre
     #Not for shiny:suppressWarnings(write.table( cor.res[paste0(selectedGene, "_neg.cor")], f.path, sep=",", append=TRUE, col.names=NA))
   }
   #Not for shiny:end.cor.time = Sys.time()
-  message(paste0("\n ", "Selected gene is expressed among: ", sel.gene.percent, " of cells present in the set provided"))
+  #message(paste0("\n ", "Selected gene is expressed among: ", sel.gene.percent, " of cells present in the set provided"))
   message("\n Correlation analysis completed")
   return(cor.res)
   

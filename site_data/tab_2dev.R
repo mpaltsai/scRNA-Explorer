@@ -212,7 +212,7 @@ tab2 <-tabPanel("Quality Control Plots",
   fluidRow(
     column(4,
            wellPanel(
-             helpText("Visualize the overall novelty of the gene expression by visualizing the genes detected per UMI"),
+             helpText("Visualize the overall novelty of gene expression by visualizing the genes detected per UMI"),
              actionButton("makeNovelty", 'Plot genes detected per UMI'),
              conditionalPanel(
                condition="input.makeNovelty>0",

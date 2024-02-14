@@ -97,12 +97,8 @@ function(input, output, session){
     })%>% bindEvent(input$startQC , ignoreInit = TRUE, ignoreNULL = TRUE)
 
     output$readData <- renderText({
-        if(is.null(base::rownames(user_input()$counts))){
-          "Genes names are absent. Please upload a file with gene names as row names"
-        }else{
-          user_input()$mes
-        }
-     })
+      user_input()$mes
+    })
     
   ##### Preprocessing #####
     
@@ -716,10 +712,11 @@ function(input, output, session){
     if(input$corData=="filtered"){
       iRNA_cor_tables <<- tryCatch( 
         {
-          iRNA(se_c()$se, input$method, input$alpha, input$geneSparsity, input$targetGenes, input$correlation_threshold, input$corData)
+          iRNA(se_c()$se, input$method, input$alpha, input$geneSparsity, input$targetGenes, input$correlation_threshold)
         },
         error = function(e) {
-         message("No filtered data available. Did you forget to filter out cells after plotting metrics?")
+         message("No filtered data available. Will run analysis with raw data")
+          iRNA(calc_se()$se, input$method, input$alpha, input$geneSparsity, input$targetGenes, input$correlation_threshold)
         }
       )
       
@@ -727,7 +724,7 @@ function(input, output, session){
     }else if(input$corData=="unfiltered"){
       #"Running analysis with raw data"
       iRNA_cor_tables <<- tryCatch({
-        iRNA(calc_se()$se, input$method, input$alpha, input$geneSparsity, input$targetGenes, input$correlation_threshold, input$corData)
+        iRNA(calc_se()$se, input$method, input$alpha, input$geneSparsity, input$targetGenes, input$correlation_threshold)
       },
       error = function(e) {
         message("Seems initial filtering at the preprocessing stage is not complete. Please go back and follow all the steps of preprocessing")
