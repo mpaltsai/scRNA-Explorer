@@ -25,7 +25,7 @@ tab3 <- tabPanel("Gene correlation",
                      
                      numericInput(inputId= "geneSparsity", "Define the percentage of cells a gene is expressed (at least 2%)", value = 0.02, min = 0.019, max = 1, step = 0.01),
                      actionButton("runCor", "Run correlation analysis"),
-                     textOutput("cor_completed"),
+                     span(textOutput("cor_completed") %>% withSpinner(), style = "color:dodgerblue"),
                      
                     helpText(strong("Note")),
                     helpText("Table columns represent the following values:"),

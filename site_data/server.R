@@ -688,9 +688,13 @@ function(input, output, session){
   ##### Correlation #####
   
   observe({
-    #validate(need(try(keep_index), "It seems you haven't filtered your data yet."))
-    #validate(need(try(myReacValues$se), "You'll have to complete the preprocessing steps before running a correlation analysis."))
-    #validate(need(try(loaded.dataSO.combined <<- gen_cluster_res()[1][[1]]), "You have to complete gene cluster annotation steps first!"))
+    validate(need(try(calc_se()$se), "You'll have to complete preprocessing steps before running a correlation analysis."))
+    updateSelectizeInput(session, "targetGenes",
+                         label = "'Bait' gene to run correlation analysis with",
+                         choices =  array(calc_se()$se@assays@data@listData$counts@Dimnames[1][[1]]), server = TRUE)
+    
+    
+    validate(need(try(levels(loaded.dataSO.combined$celltype)), "You have to complete gene cluster annotation steps first!"))
     #validate(need(try(loaded.dataSO.combined.no.cluster), "You have to complete gene cluster annotation steps first!"))
     
     if(input$corData=="clustered"){
@@ -699,9 +703,7 @@ function(input, output, session){
                         choices =  levels(loaded.dataSO.combined$celltype))
       
     }
-    updateSelectizeInput(session, "targetGenes",
-                         label = "'Bait' gene to run correlation analysis with",
-                         choices =  array(calc_se()$se@assays@data@listData$counts@Dimnames[1][[1]]), server = TRUE)
+
   })%>% bindEvent(input$corData , ignoreInit = TRUE, ignoreNULL = TRUE)
   
 
