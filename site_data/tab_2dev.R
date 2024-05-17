@@ -7,19 +7,25 @@ tab2 <-tabPanel("Quality Control Plots",
              #QC plots
              #create metrics
              helpText(strong("First of all we have to create the metrics for visualizations")),
+             selectInput("selectSample", "Choose a sample", "", selected = NULL),
              actionButton("makeMetrics", 'Create metrics'),
              span(textOutput("createdMetrics") %>% withSpinner(), style = "color:dodgerblue"),
+             helpText("Now we can inspect these metrics to assess the quality of cells sequenced"),
+             actionButton("drawPlots", "Show plots")
+             
            )       
     ),
     
     column(4,
            wellPanel(
-           helpText(strong("Pre-filtering"))
+           helpText(strong("Pre-filtering Plots")),
+           textOutput("dimsMetrics")
            #textOutput("NBinSample")
     )),
     column(4,
            wellPanel(
-             helpText(strong("Post-filtering"))
+             helpText(strong("Post-filtering Plots")),
+             textOutput("dimsMetricsClean")
            )
   )),
 
@@ -29,9 +35,9 @@ tab2 <-tabPanel("Quality Control Plots",
            wellPanel(
              #make number of UMIs/transcripts plot
              helpText("Visualize UMI counts (transcripts) per cell"),
-             actionButton("makeNBUMIs", 'Plot UMIs/transcripts per cell'),
+             #actionButton("makeNBUMIs", 'Plot UMIs/transcripts per cell'),
              conditionalPanel(
-               condition="input.makeNBUMIs>0",
+               condition="input.drawPlots>0",
                helpText("You can slide the vertical lines on the plot by changing the values below"),
                #uiOutput("myControl")
                sliderInput("nUMIs", "Number of UMIs:",
@@ -42,13 +48,13 @@ tab2 <-tabPanel("Quality Control Plots",
     column(4,
            wellPanel(
            #number of UMIs/transcripts per cell
-           plotOutput("UMIsPlot")
+           plotOutput("UMIsPlot")%>% withSpinner()
            )
       
     ),
     column(4,
            wellPanel(
-             plotOutput("UMIsPlotFiltered")
+             plotOutput("UMIsPlotFiltered")%>% withSpinner()
            )
       
     )
@@ -62,9 +68,9 @@ tab2 <-tabPanel("Quality Control Plots",
            wellPanel(
              #make number of genes HistPlot
              helpText("Visualize the distribution of genes detected per cell via histogram"),
-             actionButton("makeNBgenesHist", 'Plot genes detected per cell in a histogram'),
+             #actionButton("makeNBgenesHist", 'Plot genes detected per cell in a histogram'),
              conditionalPanel(
-               condition = "input.makeNBgenesHist>0",
+               condition = "input.drawPlots>0",
                helpText("You can slide the vertical lines on the plot by changing the values below"),
                sliderInput("nGenes", "Number of genes:",
                            min = 10, max = 1000, value = c(10,1000), step = 10)
@@ -74,12 +80,12 @@ tab2 <-tabPanel("Quality Control Plots",
     column(4,
            wellPanel(
              #number of genes per cell histogram
-             plotOutput("GenesHistPlot")
+             plotOutput("GenesHistPlot")%>% withSpinner()
            )
         ),
     column(4,
            wellPanel(
-           plotOutput("GenesHistPlotFiltered")))
+           plotOutput("GenesHistPlotFiltered")%>% withSpinner()))
       ),
   
   #genes per cell boxplot
@@ -88,19 +94,19 @@ tab2 <-tabPanel("Quality Control Plots",
            wellPanel(
              #make number of genes BoxPlot
              helpText("Visualize the distribution of genes detected per cell via boxplot"),
-             actionButton("makeNBgenesBoxPlot", 'Plot genes detected per cell in a boxplot')
+             #actionButton("makeNBgenesBoxPlot", 'Plot genes detected per cell in a boxplot')
              )
              
            ),
     column(4,
            wellPanel(
              #number of genes per cell boxplot
-             plotOutput("GenesBoxPlot")
+             plotOutput("GenesBoxPlot")%>% withSpinner()
            )
     ),
     column(4,
            wellPanel(
-             plotOutput("GenesBoxPlotFiltered")
+             plotOutput("GenesBoxPlotFiltered")%>% withSpinner()
            ))
   ),
 
@@ -109,9 +115,9 @@ tab2 <-tabPanel("Quality Control Plots",
     column(4,
            wellPanel(
              helpText("Visualize the correlation between genes detected and number of UMIs colored with mitochondrial ratio for each cell"),
-             actionButton("makeUMIsGenes", 'Plot UMIs vs. genes detected'),
+             #actionButton("makeUMIsGenes", 'Plot UMIs vs. genes detected'),
              conditionalPanel(
-               condition="input.makeUMIsGenes>0",
+               condition="input.drawPlots>0",
                helpText("You can slide the horizontal lines on the plot by changing the values below"),
                sliderInput("nUMIsVSnGenes", "Number of genes:",
                            min = 10, max = 1000, value = c(10,1000), step = 10)
@@ -121,12 +127,12 @@ tab2 <-tabPanel("Quality Control Plots",
   column(4,
          wellPanel(
            #number of UMIs vs Genes per cell 
-           plotOutput("UMIsGenesPlot")
+           plotOutput("UMIsGenesPlot")%>% withSpinner()
          )
   ),
   column(4,
          wellPanel(
-           plotOutput("UMIsGenesPlotFiltered")
+           plotOutput("UMIsGenesPlotFiltered")%>% withSpinner()
          ))
   ),
 
@@ -135,9 +141,9 @@ tab2 <-tabPanel("Quality Control Plots",
     column(4,
            wellPanel(
              helpText("Visualize the correlation between genes detected and number of UMIs colored with hemoglobin ratio for each cell"),
-             actionButton("makeUMIsGenesRBC", 'Plot UMIs vs. genes detected'),
+             #actionButton("makeUMIsGenesRBC", 'Plot UMIs vs. genes detected'),
              conditionalPanel(
-               condition="input.makeUMIsGenesRBC>0",
+               condition="input.drawPlots>0",
                helpText("You can slide the horizontal lines on the plot by changing the values below"),
                sliderInput("nUMIsVSnGenesRBC", "Number of genes:",
                            min = 10, max = 1000, value = c(10,1000), step = 10)
@@ -147,12 +153,12 @@ tab2 <-tabPanel("Quality Control Plots",
     column(4,
            wellPanel(
              #number of UMIs vs Genes per cell with rbcRatio
-             plotOutput("UMIsGenesPlotRBC")
+             plotOutput("UMIsGenesPlotRBC")%>% withSpinner()
            )
     ),
     column(4,
            wellPanel(
-             plotOutput("UMIsGenesPlotRBCFiltered")
+             plotOutput("UMIsGenesPlotRBCFiltered")%>% withSpinner()
            ))
   ),
   
@@ -161,9 +167,9 @@ tab2 <-tabPanel("Quality Control Plots",
     column(4,
            wellPanel(
              helpText("Visualize the distribution of mitochondrial gene expression detected per cell"),
-             actionButton("makemitoRatio", 'Plot mitochondrial ratio per cell'),
+             #actionButton("makemitoRatio", 'Plot mitochondrial ratio per cell'),
              conditionalPanel(
-               condition="input.makemitoRatio>0",
+               condition="input.drawPlots>0",
                helpText("You can slide the vertical lines on the plot by changing the values below"),
                sliderInput("mitoRatio", "Mitochondrial ratio:",
                            min = 0, max = 1, value = c(0,1), step = 0.0001)
@@ -173,12 +179,12 @@ tab2 <-tabPanel("Quality Control Plots",
     column(4,
            wellPanel(
              #number of UMIs vs Genes per cell with rbcRatio
-             plotOutput("mitoRatioPlot")
+             plotOutput("mitoRatioPlot")%>% withSpinner()
            )
     ),
     column(4,
            wellPanel(
-             plotOutput("mitoRatioPlotFiltered")
+             plotOutput("mitoRatioPlotFiltered")%>% withSpinner()
            ))
   ),
 
@@ -187,9 +193,9 @@ tab2 <-tabPanel("Quality Control Plots",
     column(4,
            wellPanel(
              helpText("Visualize the distribution of hemoglobins expression detected per cell"),
-             actionButton("makerbcRatio", 'Plot hemoglobins ratio per cell'),
+             #actionButton("makerbcRatio", 'Plot hemoglobins ratio per cell'),
              conditionalPanel(
-               condition="input.makerbcRatio>0",
+               condition="input.drawPlots>0",
                helpText("You can slide the vertical lines on the plot by changing the values below"),
                sliderInput("rbcRatio", "Hemoglobins ratio:",
                            min = 0, max = 1, value = c(0,1), step = 0.0001)
@@ -199,12 +205,12 @@ tab2 <-tabPanel("Quality Control Plots",
     column(4,
            wellPanel(
              #number of UMIs vs Genes per cell with rbcRatio
-             plotOutput("rbcRatioPlot")
+             plotOutput("rbcRatioPlot")%>% withSpinner()
            )
     ),
     column(4,
            wellPanel(
-             plotOutput("rbcRatioPlotFiltered")
+             plotOutput("rbcRatioPlotFiltered")%>% withSpinner()
            ))
   ),
 
@@ -213,9 +219,9 @@ tab2 <-tabPanel("Quality Control Plots",
     column(4,
            wellPanel(
              helpText("Visualize the overall novelty of gene expression by visualizing the genes detected per UMI"),
-             actionButton("makeNovelty", 'Plot genes detected per UMI'),
+             #actionButton("makeNovelty", 'Plot genes detected per UMI'),
              conditionalPanel(
-               condition="input.makeNovelty>0",
+               condition="input.drawPlots>0",
                helpText("You can slide the vertical lines on the plot by changing the value below"),
                sliderInput("novelty", "Genes detected per UMI:",
                            min = 0, max = 1, value = 0, step = 0.01)
@@ -225,12 +231,12 @@ tab2 <-tabPanel("Quality Control Plots",
     column(4,
            wellPanel(
              #number of UMIs vs Genes per cell with rbcRatio
-             plotOutput("noveltyPlot")
+             plotOutput("noveltyPlot")%>% withSpinner()
            )
     ),
     column(4,
           wellPanel(
-            plotOutput("noveltyPlotFiltered")
+            plotOutput("noveltyPlotFiltered")%>% withSpinner()
           ))
   ),
   #Plot an overview of expression for each cell
@@ -238,7 +244,8 @@ tab2 <-tabPanel("Quality Control Plots",
     column(4,
            wellPanel(
            helpText("Plot the relative proportion of the library size that is accounted for by the 300 most highly expressed features for each cell"),
-           actionButton("makeLibrary", "Plot overview of expression per cell")
+           actionButton("makeLibrary", "Plot overview of expression per cell (unfiltered)"),
+           actionButton("makeLibraryFiltered", "Plot overview of expression per cell (filtered)")
             )
            ),
     column(4,
@@ -258,7 +265,8 @@ tab2 <-tabPanel("Quality Control Plots",
     column(4,
            wellPanel(
              helpText("Plot highest expressed genes"),
-             actionButton("makeHighExpr", "Plot highest expressed genes")
+             actionButton("makeHighExpr", "Plot highest expressed genes (unfiltered)"),
+             actionButton("makeHighExprFiltered", "Plot highest expressed genes (filtered)")
              
            )),
     column(4,

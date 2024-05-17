@@ -3,7 +3,8 @@ tab4<- tabPanel("Gene enrichment analysis",
                      sidebarPanel(
                        actionButton("runEnrich", "Run enrichment analysis"),
                        textOutput("enrich_completed"),
-                       actionButton("tableEnrich", "Show results of gene enrichment analysis")
+                       helpText(strong("Note")),
+                       helpText("In the case where there are few correlated genes, enrichment analysis won't return significant terms")
                      ),
                      
                      mainPanel(

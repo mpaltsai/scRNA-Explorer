@@ -29,16 +29,18 @@ iRNA_cluster <- function(sce, method, alpha, geneSparsity, targetGenes, correlat
   paramSeuMinCells    = paramGeneSparcityThr*dim(sce)[2]
   
   #create a seurat object to work with but check first if it is already a seurat object
-  seurat = CreateSeuratObject(counts = sce@assays$RNA@counts[,sce$celltype==cluster.type], project = "sample", min.cells = paramSeuMinCells)
-  
+  #seurat = CreateSeuratObject(counts = sce@assays$RNA@counts[,sce$celltype==cluster.type], project = "sample", min.cells = paramSeuMinCells)
+  seurat = CreateSeuratObject(counts = sce, project = "sample", min.cells = paramSeuMinCells)
   
   #discard genes that are not detected in any cell
   #Ismini note: I think is already implemented with paramSeuMinCells
-  seurat.sub.nonzero = seurat[rowSums(seurat)!=0]
+  #seurat.sub.nonzero = seurat[rowSums(seurat)!=0]
+  seurat.sub.nonzero = seurat[rowSums(seurat@assays$RNA$counts)!=0,]
   
   #discard cells that none gene is detected ### NO NEED, it has been taken care of when the seurat object was created, with min. features argument
   #or with thw subsetting when checking the assay for QC
-  seurat.sub.nonzero = seurat.sub.nonzero[,which(colSums(seurat.sub.nonzero)!=0)]
+  #seurat.sub.nonzero = seurat.sub.nonzero[,which(colSums(seurat.sub.nonzero)!=0)]
+  seurat.sub.nonzero = seurat.sub.nonzero[,which(colSums(seurat.sub.nonzero@assays$RNA$counts)!=0)]
   
   ###insert normalized data in the seurat object
   #after revoving zero-rows and columns
@@ -49,8 +51,10 @@ iRNA_cluster <- function(sce, method, alpha, geneSparsity, targetGenes, correlat
   
   #capitalize genes names in the seurat object
   #rownames(x=seurat.sub.nonzero$RNA) <- toupper(rownames(x=seurat.sub.nonzero$RNA))
-  seurat.sub.nonzero$RNA@counts@Dimnames[1][[1]] <- toupper(dimnames(seurat.sub.nonzero)[1][[1]])
-  seurat.sub.nonzero$RNA@data@Dimnames[1][[1]] <- toupper(dimnames(seurat.sub.nonzero)[1][[1]])
+  #seurat.sub.nonzero$RNA@counts@Dimnames[1][[1]] <- toupper(dimnames(seurat.sub.nonzero)[1][[1]])
+  dimnames(seurat.sub.nonzero)[1][[1]] <- toupper(dimnames(seurat.sub.nonzero)[1][[1]])
+  
+  
   
   #set target genes
   genes.incl = strsplit(targetGenes, ",")
@@ -107,37 +111,53 @@ iRNA_cluster <- function(sce, method, alpha, geneSparsity, targetGenes, correlat
     #this variable is needed to go to the next iteration if becomes TRUE
     skip_to_next <- FALSE
     
-    check.it <- tryCatch( div[,which(div[["RNA"]]@data[1,]==0)], error = function(e) { 
+    #check.it <- tryCatch( div[,which(div[["RNA"]]@data[1,]==0)], error = function(e) { 
       
-      e
+    #  e
+   #   genes.xcl <<- c(genes.xcl, selectedGene)
+   #   skip_to_next <<- TRUE 
+      
+  #    e$message <- message(e, selectedGene, " is expressed in ALL cells")
+   # })
+    div <- seurat.sub.nonzero@assays$RNA$counts[selectedGene, ]
+    
+    if(length(div)==length( which(div!=0))){
       genes.xcl <<- c(genes.xcl, selectedGene)
       skip_to_next <<- TRUE 
       
-      e$message <- message(e, selectedGene, " is expressed in ALL cells")
-    })
+      message(selectedGene, " is expressed in ALL cells")
+    }
     
     if(skip_to_next) { next }
     
     #if everything is fine continue with Ea
-    Ea = div[,which(div[["RNA"]]@data[1,]==0)]
+    #Ea = div[,which(div[["RNA"]]@data[1,]==0)]
+    Ea = div[which(div==0)]
     
     #Eb holds the cells where the selected gene is expressed
-    Eb = div[, which(div[["RNA"]]@data[1,]>0)]
+    #Eb = div[, which(div[["RNA"]]@data[1,]>0)]
+    Eb = div[which(div>0)]
     
     #table F: a subset of the original data  where the selected gene is not zero
-    F = seurat.sub.nonzero[,colnames(Eb)]
+    #F = seurat.sub.nonzero[,colnames(Eb)]
+    F = seurat.sub.nonzero[,names(Eb)]
     #exclude the row of the selected gene
     F = F[-refRowIndex,]
     
     #compute the percentage of cells (in the whole dataset) where the selected gene is expressed
-    sel.gene.percent = ncol(Eb)/ncol(div)
+    #sel.gene.percent = ncol(Eb)/ncol(div)
+    sel.gene.percent = length(Eb)/length(div)
     #Check for correlation between the selected gene and all other genes in all cells in F
     #use the transpose matrices
-    Eb.t = as.matrix(t(Eb[["RNA"]]@data))
+    #Eb.t = as.matrix(t(Eb[["RNA"]]@data))
+    #make it again a seurat object
+    Eb = seurat.sub.nonzero[refRowIndex, names(Eb)]
+    Eb.t = as.matrix(t(Eb@assays$RNA@layers$data))
     
-    F.t = as.matrix(t(F[["RNA"]]@data))
+    #F.t = as.matrix(t(F[["RNA"]]@data))
+    F.t = as.matrix(t(F@assays$RNA$data))
     
-    #make a function to supress warnings
+    #make a function to suppress warnings
     cor.fun <- function(){
       #initialize a matrix to keep the results of the correlation test and the wilcoxon test
       corr.matrix = matrix(nrow = nrow(F), ncol = 5)
@@ -174,37 +194,72 @@ iRNA_cluster <- function(sce, method, alpha, geneSparsity, targetGenes, correlat
     
     ###run a Wilcoxon test###
     
-    message("\n Running a Wilcoxon test...")
-    for(i in 1:nrow(corr.sign)){
-      
-      #define the subsets of the data to include expression values for the correlated genes 
-      
-      #in cells where the selected gene is not expressed
-      x.set = as.numeric(seurat.sub.nonzero[["RNA"]]@data[rownames(corr.sign)[i], colnames(Ea)])
-      
-      #the percentage of cells in Ea the selected gene is expressed
-      percent.Ea = length(x.set[which(x.set>0)])/length(x.set)
-      #append it to corr.sign
-      corr.sign[i,4] = percent.Ea
-      
-      #where the selected gene is expressed
-      y.set = as.numeric(seurat.sub.nonzero[["RNA"]]@data[rownames(corr.sign)[i], colnames(Eb)])
-      
-      #the percentage of cells in Eb the selected gene is expressed
-      percent.Eb= length(y.set[which(y.set>0)])/length(y.set)
-      #append it to corr.sign
-      corr.sign[i,5] = percent.Eb
-      
-      #run the test
-      p.value.wtest = wilcox.test(x.set,y.set, conf.int = FALSE)$p.value
-      
-      #append the p value to the corr.sign matrix
-      corr.sign[i,3] = p.value.wtest
-      
+    message("\n Running a Wilcoxon test with correlated genes")
+    
+    #the following was vectorized and thus there is no need to show messages with spsComps::shinyCatch({})
+    ###################### old version#####################
+    #spsComps::shinyCatch({
+    #  
+    #  for(i in 1:nrow(corr.sign)){
+    #    message(paste0("\n Working on ", rownames(corr.sign)[i]))
+    #    #define the subsets of the data to include expression values for the correlated genes 
+    #    
+    #    #in cells where the selected gene is not expressed
+    #    #x.set = as.numeric(seurat.sub.nonzero[["RNA"]]@layers$data[rownames(corr.sign)[i], colnames(Ea)])
+    #    x.set = as.numeric(seurat.sub.nonzero[rownames(corr.sign)[i], names(Ea)][["RNA"]]@layers$data)
+    #    
+    #    
+    #    #the percentage of cells in Ea the selected gene is expressed
+    #    percent.Ea = length(x.set[which(x.set>0)])/length(x.set)
+    #    #append it to corr.sign
+    #    corr.sign[i,4] = percent.Ea
+    #    
+    #    #where the selected gene is expressed
+    #    #y.set = as.numeric(seurat.sub.nonzero[["RNA"]]@data[rownames(corr.sign)[i], colnames(Eb)])
+    #    y.set = as.numeric(seurat.sub.nonzero[rownames(corr.sign)[i], colnames(Eb)][["RNA"]]@layers$data)
+    #    
+    #    #the percentage of cells in Eb the selected gene is expressed
+    #   percent.Eb= length(y.set[which(y.set>0)])/length(y.set)
+    #    #append it to corr.sign
+    #    corr.sign[i,5] = percent.Eb
+    #    
+    #    #run the test
+    #    p.value.wtest = wilcox.test(x.set,y.set, conf.int = FALSE)$p.value
+    #    
+    #    #append the p value to the corr.sign matrix
+    #   corr.sign[i,3] = p.value.wtest
+    #    
+    #  }
+    #  
+    #},
+    ## blocking recommended
+    #blocking_level = "error",
+    #prefix = "My-project" #change console prefix if you don't want "SPS"
+    #)
+    
+    #matrix with expression counts for the correlated genes in Ea (Ea table holds only cells where the bait gene IS NOT expressed)
+    X= seurat.sub.nonzero[rownames(corr.sign), names(Ea)][["RNA"]]@layers$data
+    #matrix with expression counts for the correlated genes in Eb (Eb table holds only cells where the bait gene IS expressed)
+    Y = seurat.sub.nonzero[rownames(corr.sign), colnames(Eb)][["RNA"]]@layers$data
+    
+    #run Wilcoxon test
+    XY_wilcoxon_res = matrixTests::row_wilcoxon_twosample(as.matrix(X),as.matrix(Y))
+    
+    corr.sign[,3] <- XY_wilcoxon_res$pvalue
+    
+    #compute percentage of expression for each correlated gene in Ea and Eb (where the bait gene is expressed and where it is not expressed)
+    my_percent = function(x){
+      length(x[which(x>0)])/length(x)
     }
     
+    #append it to corr.sign
+    corr.sign[,4] = apply(X, 1, my_percent)
+    
+    #append it to corr.sign
+    corr.sign[,5] = apply(Y, 1, my_percent)
     
     message("\n Wilcoxon test run completed")
+
     
     #again keep only those genes where p values are less than alpha.level
     corr.sign.genes <- corr.sign[which(corr.sign[,3]<alpha.level), , drop = FALSE]

@@ -18,9 +18,9 @@ Note:\
 If you want to work with base packages of R you can read the file with the following ways depending on file formats (csv or tsv)
 ```{r}
 # csv
-your_count_matrix <- read.csv(input, header = TRUE, row.names = 1, sep = ",")
+your_count_matrix <- read.csv(your_filepath, header = TRUE, row.names = 1, sep = ",")
 # tsv
-your_count_matrix <- read.csv(input, header = TRUE, row.names = 1, sep = "\t")
+your_count_matrix <- read.csv(your_filepath, header = TRUE, row.names = 1, sep = "\t")
 ```
 Otherwise, and recommended for large files, you can use fread function from package data.table \
 

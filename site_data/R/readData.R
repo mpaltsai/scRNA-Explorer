@@ -7,6 +7,8 @@ readData <- function(count.matrix, seurat, inputFile, inputDir){
   input_dir = inputDir
   count.matrix = count.matrix
   seurat = seurat
+  
+  
   if(count.matrix){
     # Import count matrix
     #sm <- read.csv(input, header = TRUE, row.names = 1, sep = "\t")
@@ -18,13 +20,15 @@ readData <- function(count.matrix, seurat, inputFile, inputDir){
       #the following doesn't apply anymore (9/2023)
       #txi = txi@assays$RNA@counts
       txi <-txi@assays@data$counts
-      counts <- as(as.matrix(txi[,]), "dgCMatrix")
+      my_counts <- as(as.matrix(txi[,]), "dgCMatrix")
       # Import barcodes
-      colnames(counts) <- colnames(txi)
+      colnames(my_counts) <- colnames(txi)
       # Import genes
-      rownames(counts) <- rownames(txi)
-
-      return(counts)
+      rownames(my_counts) <- rownames(txi)
+      
+      samples.list <- list(c(my_counts))
+      names(samples.list)[1] <- "sample"
+      return(samples.list)
       
       
       #txi <- readRDS(input)
@@ -40,7 +44,7 @@ readData <- function(count.matrix, seurat, inputFile, inputDir){
       
       #txi <- read.csv(input, header = TRUE, row.names = 1, sep = "\t")
       # Convert to a sparse matrix for more efficient computation
-      counts <- as(txi[,], "dgCMatrix")
+      my_counts <- as(txi[,], "dgCMatrix")
       #counts <- mltools::sparsify(txi)
       # Import barcodes
       #cell_ids <- colnames(txi)
@@ -48,7 +52,10 @@ readData <- function(count.matrix, seurat, inputFile, inputDir){
       
       #rownames(counts) <-txi$V1
 
-        return(counts)
+      #samples.list[["sample"]] <- my_counts
+      samples.list <- list(c(my_counts))
+      names(samples.list)[1] <- "sample"
+      return(samples.list)
       
     }
   }else{
@@ -75,25 +82,31 @@ readData <- function(count.matrix, seurat, inputFile, inputDir){
                                       stringsAsFactors = FALSE)
         }
         if(grepl("count", x)){
-          counts <- readMM(x)
+          my_counts <- readMM(x)
         }
       }
-      rownames(counts) = feature.names$V2
-      genes <- rownames(counts)
+      rownames(my_counts) = feature.names$V2
+      genes <- rownames(my_counts)
       
-      colnames(counts) = c(1:dim(counts)[2]) 
-      cell_ids <- colnames(counts)
-      return(counts)
+      colnames(my_counts) = c(1:dim(my_counts)[2]) 
+      cell_ids <- colnames(my_counts)
+      
+      samples.list <- list(c(my_counts))
+      names(samples.list)[1] <- "sample"
+      return(samples.list)
     }else{
       
       # Read 10X data from the directory provided in input_dir
-      counts <- Read10X(data.dir = input_dir)
+      my_counts <- Read10X(data.dir = input_dir)
       
       # Import barcodes
-      cell_ids <- colnames(counts)
+      cell_ids <- colnames(my_counts)
       # Import genes
-      genes <- rownames(counts)
-      return(counts)
+      genes <- rownames(my_counts)
+      
+      samples.list <- list(c(my_counts))
+      names(samples.list)[1] <- "sample"
+      return(samples.list)
     }
   }
 }

@@ -1,4 +1,4 @@
-createMetadata <- function(countsData, a, b){
+createMetadata <- function(list_samples, a, b){
   ####
   # Check this:Cannot connect to AnnotationHub server, using 'localHub=TRUE' instead
   #Using 'localHub=TRUE'
@@ -8,44 +8,66 @@ createMetadata <- function(countsData, a, b){
   ####
   
   organismName = a
-  gene.name = b
+  multiple.samples = b
+  #gene.name = b
+  
 
-  if(organismName == "Mus musculus"){
-    load("annotations_mmus.Rda")
-    #if(identical(grep("ENSMUSG",rownames(countsData)), integer(0)) ){
-    #  gene.name = TRUE
-    #}else{
-    #  gene.name=FALSE
-    #}
-  }else{
-    load("annotations_hsap.Rda")
-    #if(identical(grep("ENSG",rownames(countsData)), integer(0)) ){
-    #  gene.name = TRUE
-    #}else{
-    #  gene.name=FALSE
-    #}
-  }
+  ######### retrieve annotation data from AnnotationHub ######### 
+  
   # Connect to AnnotationHub
   #ah <- AnnotationHub(localHub=FALSE)
   # Access the Ensembl database for organism
- 
+  
   #ahDb <- query(ah, 
-   #             pattern = c(organismName, "EnsDb"), 
-    #            ignore.case = TRUE)
+  #             pattern = c(organismName, "EnsDb"), 
+  #            ignore.case = TRUE)
   # Acquire the latest annotation files
   #id <- ahDb %>%
   #  mcols() %>%
   #  rownames() %>%
-   # tail(n = 1)
- # edb <- ah[[id]]
+  # tail(n = 1)
+  # edb <- ah[[id]]
   
   # Extract gene-level information from database
   #annotations <- genes(edb, 
-   #                    return.type = "data.frame")
+  #                    return.type = "data.frame")
   ## Select annotations of interest
   #annotations <- annotations %>%
-   # dplyr::select(gene_id, gene_name, gene_biotype, seq_name, description, entrezid)
+  # dplyr::select(gene_id, gene_name, gene_biotype, seq_name, description, entrezid)
+  ########################################################################################
   
+  #Initialize a list to keep metadata and counts data for each sample
+  if(multiple.samples){
+    my_keys<-c()
+    for(x in names(list_samples)){
+      my_key <- x
+      my_keys <- c(my_keys, my_key)
+    }
+    samples.list <- vector(mode="list", length=length(my_keys))
+    names(samples.list) <- my_keys
+    
+  }else{
+    samples.list <- list()
+  }
+
+  i=1
+ for(countsData in list_samples){
+   
+   if(organismName == "Mus musculus"){
+     load("annotations_mmus.Rda")
+     if(identical(grep("ENSMUSG",rownames(countsData)), integer(0)) ){
+       gene.name = TRUE
+     }else{
+       gene.name=FALSE
+     }
+   }else{
+     load("annotations_hsap.Rda")
+     if(identical(grep("ENSG",rownames(countsData)), integer(0)) ){
+       gene.name = TRUE
+     }else{
+       gene.name=FALSE
+     }
+   }
   #check for duplicates
   countsData <- countsData[which(!duplicated(rownames(countsData))),]
  
@@ -102,7 +124,7 @@ createMetadata <- function(countsData, a, b){
   metadata$nGene <- Matrix::colSums(countsData > 0)
   ## Add number of UMIs per gene for each cell to metadata
   metadata$log10GenesPerUMI <- log10(metadata$nGene) / log10(metadata$nUMI)
-  metadata$sample <- "sample"
+  metadata$sample <- names(list_samples)[i]
   # Number of UMIs assigned to mitochondrial genes
   metadata$mtUMI <- Matrix::colSums(countsData[which(rownames(countsData) %in% mt),], na.rm = T)
   #counts@Dimnames[1]
@@ -115,6 +137,20 @@ createMetadata <- function(countsData, a, b){
   metadata$rbcUMI <- Matrix::colSums(countsData[which(rownames(countsData) %in% rbc),], na.rm = TRUE)
   metadata$rbcUMI[is.na(metadata$rbcUMI)] <- 0
   metadata$rbcRatio <- metadata$rbcUMI/metadata$nUMI
+  if(multiple.samples){
+    samples.list[[names(list_samples)[i]]] = c(metadata, counts = countsData)
+    i = i + 1
+  }else{
+    
+    samples.list <- list(c(metadata, counts = countsData))
+    names(samples.list)[1] <- "sample"
+
+  }
   
-  return(c(metadata, counts = countsData))
+ }
+ 
+ 
+  
+  #return(c(metadata, counts = countsData))
+  return(samples.list)
 }

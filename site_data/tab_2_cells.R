@@ -8,29 +8,51 @@ tab2_cell_clusters <-tabPanel("Cell type clustering",
                          wellPanel(
                            
                            helpText(strong("Now we have filtered out low quality cells we can proceed to cell type clustering.")),
-                           helpText(strong("Firstly, we'll normalize expression values and look for outlier features")),
+                           helpText(strong("Firstly, we'll normalize expression values, we'll look for outlier features and we'll perform a dimensionality reduction procedure")),
                            actionButton("normData", 'Normalize data'),
                            span(textOutput("normalizeData") %>% withSpinner(), style = "color:dodgerblue"),
                          )       
                   ),
                   
-                  column(4,
-                         #helpText(""),
-                         #textOutput("")
-                  ),
-                  column(4,
-                         #helpText("")
+                  column(8,
+                         wellPanel(
+                           plotOutput("elbowPlot")
+                         ),
                   )
+
                 ),
                 
-                #Dimensionality reduction
+                #Find neighbors
                 fluidRow(
                   column(4,
                          wellPanel(
                            
-                           helpText(strong("At this step we'll perform a dimensionality reduction procedure to define cell clusters")),
-                           actionButton("dimRedClust", 'Dimensionality reduction and clustering'),
-                           span(textOutput("DimRedCluster") %>% withSpinner(), style = "color:dodgerblue")
+                           numericInput(inputId="nPCs", "How many dimensions of reduction (i.e. principal components) to use in finding neighbors?", 
+                                        value = 30, min = 0, max = 30, step = 1),
+                           actionButton("findNeigh", 'Compute the k.param nearest neighbors'),
+                           span(textOutput("findNeighRes") %>% withSpinner(), style = "color:dodgerblue")
+                         )       
+                  ),
+                  
+                  column(4,
+                         #helpText("Pre-filtering"),
+                         #textOutput("NBinSample")
+                  ),
+                  column(4,
+                         #helpText("Post-filtering")
+                  )
+                ),
+                
+                #Find clusters
+                fluidRow(
+                  column(4,
+                         wellPanel(
+                           
+                           numericInput(inputId="resolutionValue", "With what resolution to identify clusters of cells?", 
+                                        value = 0.3),
+                           helpText(strong("Note: For values above 1 a larger number of communities will be returned")),
+                           actionButton("findClusters", 'Identify cell clusters'),
+                           span(textOutput("findClustersRes") %>% withSpinner(), style = "color:dodgerblue")
                          )       
                   ),
                   

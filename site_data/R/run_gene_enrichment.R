@@ -29,7 +29,7 @@ if (organismName=="Homo sapiens"){
   gost_S198 = list()
   
   for (x in 1:length(g.sets)){
-    
+    message("\n")
     if(length(g.sets[x][1][[1]])==0){
       message("\n ", names(g.sets[x]), " is empty")
       gost_S198[names(g.sets[x])] <- matrix(rep(NA,5),ncol=5, 
@@ -57,7 +57,7 @@ if (organismName=="Homo sapiens"){
           message(w)
         },
         finally = {
-          message('\n')
+          message('')
         }
         
       ) 

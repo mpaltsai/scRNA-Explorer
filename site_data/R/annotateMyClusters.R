@@ -1,10 +1,15 @@
-annotateMyClusters <- function(x, a, b, c){
+annotateMyClusters <- function(x, a, b, c, d){
   library(enrichR)
   input_library = x
+  
   organismName = a
+  #organismName = "Mus musculus"
   loaded.dataSO.combined.markerstop = b
-  loaded.dataSO.combined = c
 
+  loaded.dataSO.combined = c 
+  
+  loaded.dataSO.combined.markers = d
+  
   if(getOption("enrichR.live")){
     setEnrichrSite("Enrichr") # Human genes
     annotatedclusters<<-c()
@@ -36,7 +41,7 @@ annotateMyClusters <- function(x, a, b, c){
         annot_var = 1
       }else if(input_library == "2"){
         annot_var = 2
-      }else{
+      }else if(input_library == "3"){
         annot_var = 3
       }
       annotatedclusters<-c(annotatedclusters,toString(make.names(celltype[annot_var])))
@@ -53,6 +58,7 @@ annotateMyClusters <- function(x, a, b, c){
   
   #Rename indents 
   new.cluster.ids <- make.names(annotatedclusters,unique = T)
+  names(annotatedclusters)
   #We have to rename the names(listofresults) the same way so we can plot them because in case there are two clusters named the same way i.e. "Fibroblast.Heart.CL.0000057" the previous
   #will change the name of the clusters to "Fibroblast.Heart.CL.0000057" and "Fibroblast.Heart.CL.0000057.1" in loaded.dataSO.combined$celltype but they will stay identical i.e. "Fibroblast.Heart.CL.0000057" for both in listofresults
   names(listofresults) <- make.names(names(listofresults), unique = TRUE)
