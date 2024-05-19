@@ -12,15 +12,15 @@ annotateMyClusters <- function(x, a, b, c, d){
   
   if(getOption("enrichR.live")){
     setEnrichrSite("Enrichr") # Human genes
-    annotatedclusters<<-c()
-    listofresults<<-c()
+    annotatedclusters <-c()
+    listofresults <-c()
     #listOfClusterAnnotationImages <<-list()
     if(organismName == "Mus musculus"){
       #for mouse:
-      dbstouse <<- c("PanglaoDB_Augmented_2021","CellMarker_Augmented_2021","Tabula_Muris")  
+      dbstouse <- c("PanglaoDB_Augmented_2021","CellMarker_Augmented_2021","Tabula_Muris")  
     }else{
       #for human:
-      dbstouse <<- c("PanglaoDB_Augmented_2021","CellMarker_Augmented_2021","Tabula_Sapiens")
+      dbstouse <- c("PanglaoDB_Augmented_2021","CellMarker_Augmented_2021","Tabula_Sapiens")
     }
     #m=2
     #input_library = "3"
