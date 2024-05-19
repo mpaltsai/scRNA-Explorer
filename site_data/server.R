@@ -18,6 +18,10 @@ options(shiny.maxRequestSize=15000*1024^2)  #max upload file size 15GB
 
 function(input, output, session){
   
+  #reactive values to store reactive objects
+  my_react_vals <- reactiveValues()
+  
+  
   ##### Upload, setting parameters and read data routine #####
   
   #Validate uploaded .csv or .tsv file
@@ -145,12 +149,31 @@ function(input, output, session){
    #   output$initDataFilt <- renderText({NULL})
    # })
     
-    #empty outputs when changing input data
+    #empty outputs and reactive values when changing input data
     observeEvent(input$startQC,{
+      my_react_vals$d_to_filter <- NULL
+      my_react_vals$d_to_metadata <- NULL
     #hide("readData")
-      output$readData <- renderText({NULL})
-      output$paramsAddMetadata <- renderText({NULL})
-      output$initDataFilt <- renderText({NULL})
+      if(input$startQC>0){
+        output$readData <- renderText({NULL})
+        output$paramsAddMetadata <- renderText({NULL})
+        output$initDataFilt <- renderText({NULL})
+        #shinyjs::reset("reset_inputs")
+        
+        my_react_vals$filt_samples_list <- NULL
+        my_react_vals$loaded.dataSO.combined.no.cluster <- NULL
+        my_react_vals$loaded.dataSO.combined.markers <- NULL
+        my_react_vals$loaded.dataSO.combined.markerstop <- NULL
+        my_react_vals$gen_cluster_res <- NULL
+        my_react_vals$loaded.dataSO.combined <- NULL
+        my_react_vals$iRNA_cor_tables <- NULL
+        my_react_vals$iRNA_enrich_tables <- NULL
+        #metrics_clean() <- NULL
+        #se_c() <- NULL
+        
+
+      }
+      
     })
     
     #to prevent withSpinner running when starting the app
@@ -164,6 +187,9 @@ function(input, output, session){
         #validate(need(input$typeData, message=FALSE))
       validate(need(user_input(), message = FALSE))
       validate(need(input$testData, message=FALSE))
+      
+      my_react_vals$d_to_metadata <- user_input()$my_list
+      
       if(input$testData==2){
           
           output$readData <- renderText({
@@ -195,15 +221,16 @@ function(input, output, session){
     
     #add metadata and update counts, sometimes we have to subset the count.matrix because we don't have matches between gene names and ensembl IDs
     calc_metadata <- reactive({
-      validate(need(user_input(), message = FALSE))
+      #validate(need(try(user_input()), message = FALSE))
+      validate(need(try(my_react_vals$d_to_metadata), message = "Please read data first"))
       if(input$testData == 1){#test dataset
         if(length(input$typeOrganism) == 0){
           #output$paramsAddMetadata <- renderText(
           my_metadata_list <- list(mes = "You have to select the origin organism")
           #)
         }else{
-          d_to_metadata <- user_input()$my_list
-          my_metadata_list <- c(my_list = list(createMetadata(list_samples= d_to_metadata,"Mus musculus", FALSE)), ############## <<- #############################
+          #d_to_metadata <- user_input()$my_list
+          my_metadata_list <- c(my_list = list(createMetadata(list_samples= my_react_vals$d_to_metadata,"Mus musculus", FALSE)), ############## <<- #############################
                                  mes = "Metadata added")
           
         }
@@ -214,8 +241,8 @@ function(input, output, session){
           my_metadata_list <- list(mes = "You have to select the origin organism")
           #)
         }else{
-          d_to_metadata <- user_input()$my_list
-          my_metadata_list <- c(my_list = list(createMetadata(list_samples = d_to_metadata,input$typeOrganism, FALSE)),
+          #d_to_metadata <- user_input()$my_list
+          my_metadata_list <- c(my_list = list(createMetadata(list_samples = my_react_vals$d_to_metadata,input$typeOrganism, FALSE)),
                         mes = "Metadata added")
           
         }
@@ -224,8 +251,8 @@ function(input, output, session){
           
           my_metadata_list <- list(mes = "You have to select the origin organism")
         }else{
-          d_to_metadata <- user_input()$my_list
-          my_metadata_list <- c(my_list = list(createMetadata(list_samples = d_to_metadata,input$typeOrganism, FALSE)),
+          #d_to_metadata <- user_input()$my_list
+          my_metadata_list <- c(my_list = list(createMetadata(list_samples = my_react_vals$d_to_metadata,input$typeOrganism, FALSE)),
             mes = "Metadata added")
           
         }
@@ -236,8 +263,8 @@ function(input, output, session){
             
             my_metadata_list <- list(mes = "You have to select the origin organism")
           }else{
-            d_to_metadata <- user_input()$my_list
-            my_metadata_list <- c(my_list = list(createMetadata(list_samples = d_to_metadata,input$typeOrganism, TRUE)),
+            #d_to_metadata <- user_input()$my_list
+            my_metadata_list <- c(my_list = list(createMetadata(list_samples = my_react_vals$d_to_metadata,input$typeOrganism, TRUE)),
               mes = "Metadata added")
           }
         }
@@ -245,8 +272,11 @@ function(input, output, session){
     })%>% bindEvent(input$addMetadata , ignoreInit = TRUE, ignoreNULL = TRUE)
     
     observeEvent(input$addMetadata, {
+      
+      my_react_vals$d_to_filter <- calc_metadata()$my_list
+      
       output$paramsAddMetadata <- renderText({
-
+        
           calc_metadata()$mes
 
       })
@@ -254,11 +284,13 @@ function(input, output, session){
     
     #minimal filtering
     calc_se <- reactive({
-      validate(need(calc_metadata()$my_list, message = FALSE))
+
+      validate(need(try(my_react_vals$d_to_filter), message = "Please add metadata first")) ########################
+      #validate(need(calc_metadata()$my_list, message = FALSE))
       #metaData <<- calc_metadata()$my_list
       if(input$testData == 1){#test dataset
-        d_to_filter <- calc_metadata()$my_list
-        my_filter_list <- c(my_list = list(initial_filt(list_samples = d_to_filter, FALSE)), ############## <<- #############################
+        #d_to_filter <- calc_metadata()$my_list ########################
+        my_filter_list <- c(my_list = list(initial_filt(list_samples = my_react_vals$d_to_filter, FALSE)), ############## <<- #############################
                             mes = "Minimal filtering completed")
         
         
@@ -269,8 +301,8 @@ function(input, output, session){
             my_filter_list <- list(mes = "You have to select the origin organism") ############## <<- #############################
             #)
           }else{
-            d_to_filter <- calc_metadata()$my_list
-            my_filter_list <- c(my_list = list(initial_filt(list_samples = d_to_filter, FALSE)),
+            #d_to_filter <- calc_metadata()$my_list
+            my_filter_list <- c(my_list = list(initial_filt(list_samples = my_react_vals$d_to_filter, FALSE)),
                                 mes = "Minimal filtering completed")
             
           }
@@ -279,8 +311,8 @@ function(input, output, session){
             
             my_filter_list <- list(mes = "You have to select the origin organism")
           }else{
-            d_to_filter <- calc_metadata()$my_list
-            my_filter_list <- c(my_list = list(initial_filt(list_samples = d_to_filter, FALSE)),
+            #d_to_filter <- calc_metadata()$my_list
+            my_filter_list <- c(my_list = list(initial_filt(list_samples = my_react_vals$d_to_filter, FALSE)),
                                 mes = "Minimal filtering completed")
             
           }
@@ -291,8 +323,8 @@ function(input, output, session){
             
             my_filter_list <- list(mes = "You have to select the origin organism")
           }else{
-            d_to_filter <- calc_metadata()$my_list
-            my_filter_list <- c(my_list = list(initial_filt(list_samples = d_to_filter, TRUE)),
+            #d_to_filter <- calc_metadata()$my_list
+            my_filter_list <- c(my_list = list(initial_filt(list_samples = my_react_vals$d_to_filter, TRUE)),
                                 mes = "Minimal filtering completed")
           }
         }
@@ -349,6 +381,7 @@ function(input, output, session){
       my_name <- input$selectSample
     })
   
+
     #create metrics
     calc_metrics <- reactive({
       validate(need(calc_se()$my_list, message="Please complete the initial filtering before proceeding")) 
@@ -362,18 +395,17 @@ function(input, output, session){
     
     output$createdMetrics <- renderText({
       validate(need(calc_se()$my_list, message="Please complete the initial filtering before proceeding")) 
-      calc_metrics()$mes
-      
-    }) 
-  
+        calc_metrics()$mes
+      }) 
+
     output$dimsMetrics <- renderText({
       validate(need(calc_metrics(), message= FALSE))
       paste0("Dimensions of ", my_sample_name(), ":",
              "\nFeatures: ", dim(calc_se()$my_list[[my_sample_name()]]$se)[1],
              "\nCells: ", dim(calc_se()$my_list[[my_sample_name()]]$se)[2])
     })
+    
   #Update slider min & max values when metrics object is created
-
     observeEvent(input$drawPlots,{
       validate(need(input$makeMetrics, message=FALSE))
       validate(need(calc_metrics(), message= FALSE))
@@ -410,11 +442,13 @@ function(input, output, session){
   #}) %>% bindEvent(input$makeNBUMIs , ignoreInit = TRUE, ignoreNULL = TRUE)
   
   
-  
   output$UMIsPlot <- renderPlot({
       validate(need(calc_metrics(), message= "You have to compute metrics for your sample first"))
+
       createUMIsPlot(calc_metrics(), input$nUMIs[1], input$nUMIs[2])
+      
     })%>% bindEvent(c(input$drawPlots, input$nUMIs) , ignoreInit = TRUE, ignoreNULL = TRUE)
+  
   #})%>% bindEvent(c(input$makeNBUMIs, input$nUMIs) , ignoreInit = TRUE, ignoreNULL = TRUE)
   
   #nGenes histogram
@@ -606,7 +640,7 @@ function(input, output, session){
   })%>% bindEvent(input$QCFiltering , ignoreInit = TRUE, ignoreNULL = TRUE)
   
   output$QCDataFilt <- reactive({
-    se_c()$mes
+      se_c()$mes
   })
   
   #create a list to keep filtered data for each sample
@@ -616,7 +650,7 @@ function(input, output, session){
     names(calc_se()$my_list)
   })
   #reactive values to store the samples list
-  my_react_vals <- reactiveValues()#(filt_samples_list = NULL, loaded.dataSO.combined.no.cluster = NULL, loaded.dataSO.combined.markers = NULL, loaded.dataSO.combined.markerstop = NULL)
+  #my_react_vals <- reactiveValues()#(filt_samples_list = NULL, loaded.dataSO.combined.no.cluster = NULL, loaded.dataSO.combined.markers = NULL, loaded.dataSO.combined.markerstop = NULL)
   
   #initialize a samples' list for multiple samples
   observeEvent(input$initFiltering,{
@@ -666,11 +700,13 @@ function(input, output, session){
 
    
   output$metricsFilt<- renderText({
+
     metrics_clean()$mes
-    
+ 
   })
+  
   output$dimsMetricsClean <- renderText({
-    #validate(need(metrics_clean(), message= FALSE))
+    validate(need(metrics_clean(), message= FALSE))
     paste0("Dimensions of filtered ", my_sample_name(), ":",
            "\nFeatures: ", dim(my_react_vals$filt_samples_list[[my_sample_name()]])[1],
            "\nCells: ", dim(my_react_vals$filt_samples_list[[my_sample_name()]])[2])
@@ -792,7 +828,7 @@ function(input, output, session){
   
   ##### Cell clustering #####
   
-  #I have to initialize a variable that corresponds to input$typeData == TRUE, else I have a problem when working with testData, because input$typeData is NULL in this case
+  #I have to initialize a variable that corresponds to input$typeData == 4, else I have a problem when working with testData, because input$typeData is NULL in this case
   observeEvent(input$startQC,{
     validate(need(input$testData, message = FALSE))
     if(input$testData == 1){
@@ -1133,17 +1169,28 @@ function(input, output, session){
   })%>% bindEvent(input$plotHeatmap , ignoreInit = TRUE, ignoreNULL = TRUE)
  ##############################################################################################################################################
   #annotate gene clusters
-  gen_cluster_res <- reactive({
+  observeEvent(input$annotClusters,{
     validate(need(my_react_vals$loaded.dataSO.combined.markerstop, message = FALSE))
     spsComps::shinyCatch({
-      annotateMyClusters(input$annotLibrary, input$typeOrganism, my_react_vals$loaded.dataSO.combined.markerstop, my_react_vals$loaded.dataSO.combined.no.cluster, my_react_vals$loaded.dataSO.combined.markers)
+      my_react_vals$gen_cluster_res <- annotateMyClusters(input$annotLibrary, input$typeOrganism, my_react_vals$loaded.dataSO.combined.markerstop, my_react_vals$loaded.dataSO.combined.no.cluster, my_react_vals$loaded.dataSO.combined.markers)
     },
     # blocking recommended
     blocking_level = "error",
     prefix = "My-project" #change console prefix if you don't want "SPS"
     )
+  })
+  
+  #gen_cluster_res <- reactive({
+   # validate(need(my_react_vals$loaded.dataSO.combined.markerstop, message = FALSE))
+   # spsComps::shinyCatch({
+   #   annotateMyClusters(input$annotLibrary, input$typeOrganism, my_react_vals$loaded.dataSO.combined.markerstop, my_react_vals$loaded.dataSO.combined.no.cluster, my_react_vals$loaded.dataSO.combined.markers)
+   # },
+    # blocking recommended
+   # blocking_level = "error",
+   # prefix = "My-project" #change console prefix if you don't want "SPS"
+   # )
     
-  }) #%>% bindEvent(input$annotClusters , ignoreInit = TRUE, ignoreNULL = TRUE)
+ # }) #%>% bindEvent(input$annotClusters , ignoreInit = TRUE, ignoreNULL = TRUE)
   
    output$anot_completed <- renderText({
      validate(need(my_react_vals$loaded.dataSO.combined.no.cluster, message = "You have to complete the normalization and reduction step first"))
@@ -1152,7 +1199,7 @@ function(input, output, session){
      )
      validate(need(my_react_vals$loaded.dataSO.combined.markerstop, message = "You have to choose how many markers to use first"))
      validate(
-       need(try(gen_cluster_res()), message = FALSE)
+       need(try(my_react_vals$gen_cluster_res), message = FALSE)
      )
     #gen_cluster_res <- gen_cluster_res()
    "Annotation completed"
@@ -1161,10 +1208,10 @@ function(input, output, session){
   
   #update selectInput for gene clusters 
   observe({
-    validate(need(gen_cluster_res(), message = FALSE))
+    validate(need(my_react_vals$gen_cluster_res, message = FALSE))
     updateSelectInput(session, "selectCluster",
                       label = "Choose a gene cluster",
-                      choices =  levels(gen_cluster_res()[1][[1]]$celltype))
+                      choices =  levels(my_react_vals$gen_cluster_res[1][[1]]$celltype))
   })%>% bindEvent(input$showClusters , ignoreInit = TRUE, ignoreNULL = TRUE)
   
   
@@ -1175,9 +1222,9 @@ function(input, output, session){
       need(try(my_react_vals$loaded.dataSO.combined.markers), "You have to define cell type markers first and then choose the number of marker genes before proceeding")
     )
     validate(need(my_react_vals$loaded.dataSO.combined.markerstop, message = "You have to choose how many markers to use first"))
-    validate(need(gen_cluster_res, message = FALSE))
+    validate(need(my_react_vals$gen_cluster_res, message = FALSE))
     
-    enriched <- gen_cluster_res()[4][[1]]
+    enriched <- my_react_vals$gen_cluster_res[4][[1]]
     if(input$typeOrganism == "Mus musculus"){
       if (getOption("enrichR.live")){
         #for mouse
@@ -1195,13 +1242,13 @@ function(input, output, session){
   #compute UMAP first
   #loaded.dataSO.combined <- reactive({
     observeEvent(input$plotUMAP, {
-    req(gen_cluster_res())
+    req(my_react_vals$gen_cluster_res)
     req(input$nPCs)
     #if(input$typeData==4){
     if(my_react_vals$multiple_case){
       spsComps::shinyCatch({
 
-        my_react_vals$loaded.dataSO.combined <- RunUMAP(gen_cluster_res()[1][[1]], reduction = "integrated.cca", dims = 1:input$nPCs, reduction.name = "umap")
+        my_react_vals$loaded.dataSO.combined <- RunUMAP(my_react_vals$gen_cluster_res[1][[1]], reduction = "integrated.cca", dims = 1:input$nPCs, reduction.name = "umap")
 
         },
       # blocking recommended
@@ -1210,7 +1257,7 @@ function(input, output, session){
       )
     }else{
       spsComps::shinyCatch({
-        my_react_vals$loaded.dataSO.combined <- RunUMAP(gen_cluster_res()[1][[1]], reduction = "pca", dims = 1:input$nPCs, reduction.name = "umap")
+        my_react_vals$loaded.dataSO.combined <- RunUMAP(my_react_vals$gen_cluster_res[1][[1]], reduction = "pca", dims = 1:input$nPCs, reduction.name = "umap")
       },
       # blocking recommended
       blocking_level = "error",
@@ -1231,7 +1278,7 @@ function(input, output, session){
       need(try(my_react_vals$loaded.dataSO.combined.markers), "You have to define cell type markers first and then choose the number of marker genes before proceeding")
     )
     validate(need(my_react_vals$loaded.dataSO.combined.markerstop, message = "You have to choose how many markers to use first"))
-    validate(need(gen_cluster_res(), message = "You have to complete the cluster annotation step first"))
+    validate(need(my_react_vals$gen_cluster_res, message = "You have to complete the cluster annotation step first"))
     validate(need(my_react_vals$loaded.dataSO.combined, message = FALSE))
     
     DimPlot(my_react_vals$loaded.dataSO.combined, reduction = "umap", group.by = c("orig.ident", "celltype") ,combine = TRUE, label.size = 2)
@@ -1243,7 +1290,7 @@ function(input, output, session){
   #review expression of top markers
   output$vizTopMarkersExpr <- renderPlot({
     validate(need(my_react_vals$loaded.dataSO.combined.markerstop, message = "You have to complete previous steps first"))
-    validate(need(gen_cluster_res(), message = "You have to complete the cluster annotation step first"))
+    validate(need(my_react_vals$gen_cluster_res, message = "You have to complete the cluster annotation step first"))
     validate(need(my_react_vals$loaded.dataSO.combined, message = "You have to compute UMAP at the previous step"))
     #loaded.dataSO.combined.markerstop <<- gen_cluster_res()[3][[1]]
     markers.to.plot <- unique(my_react_vals$loaded.dataSO.combined.markerstop$gene) 
@@ -1267,6 +1314,9 @@ function(input, output, session){
     validate(
       need(try(my_react_vals$loaded.dataSO.combined), "You have to complete previous steps first")
     )
+    validate(
+      need(try(input$selectMarkerGene), "Please choose a marker from the dropdown menu")
+    )
     #loaded.dataSO.combined <<- gen_cluster_res()[1][[1]]
     VlnPlot(my_react_vals$loaded.dataSO.combined, features = input$selectMarkerGene)
   })%>% bindEvent(input$plotViolin , ignoreInit = TRUE, ignoreNULL = TRUE)
@@ -1275,6 +1325,9 @@ function(input, output, session){
   output$vizGeneFeature <- renderPlot({
     validate(
       need(try(my_react_vals$loaded.dataSO.combined), "You have to complete previous steps first")
+    )
+    validate(
+      need(try(input$selectMarkerGene), "Please choose a marker from the dropdown menu")
     )
     #loaded.dataSO.combined <<- gen_cluster_res()[1][[1]]
     FeaturePlot(my_react_vals$loaded.dataSO.combined, features = input$selectMarkerGene,label = T)& theme(legend.position = c(0.1,0.2))
@@ -1305,10 +1358,11 @@ function(input, output, session){
   
   
   ##### Correlation #####
-  observeEvent(input$corData,{
-    
+  #observeEvent(input$corData,{
+   observe({ 
     #request minimal filtered data
     validate(need(calc_se()$my_list, FALSE))
+     validate(need(input$corData, message = FALSE))
     #update list of sample and list of genes
     #if(input$typeData==4){
       
@@ -1347,7 +1401,7 @@ function(input, output, session){
         #my_react_vals$cor_counts <- calc_se()$my_list[[cor_sample]]$se@assays@data@listData$counts
         
       }else if(input$corData=='clustered'){
-        validate(need(try(gen_cluster_res()[1][[1]]), "You have to complete the annotation of clusters at the cell type clustering stage before running a correlation analysis"))
+        validate(need(try(my_react_vals$gen_cluster_res[1][[1]]), "You have to complete the annotation of clusters at the cell type clustering stage before running a correlation analysis"))
         validate(need(try(my_react_vals$filt_samples_list), message = "You have to complete filtering steps first before running a correlation analysis"))
         validate(need(any(mapply(is.null, my_react_vals$filt_samples_list )) == FALSE, message = "It seems you forgot to filter out cells in some/all of your samples"))
         validate(need(unique(my_react_vals$loaded.dataSO.combined.no.cluster$orig.ident), message = FALSE))
@@ -1386,18 +1440,22 @@ function(input, output, session){
      #                   choices =  levels(my_react_vals$loaded.dataSO.combined$celltype.label))
       
     #}
-     }, ignoreInit = TRUE, ignoreNULL = TRUE)
-  #})%>% bindEvent(input$corData , ignoreInit = TRUE, ignoreNULL = TRUE)
+     #})#, ignoreInit = TRUE, ignoreNULL = TRUE)
+  })%>% bindEvent(input$corData , ignoreInit = TRUE, ignoreNULL = TRUE)
   
+    #observe({
     observeEvent(input$targetGenesSampleFiltered,{
       validate(need(my_react_vals$filt_samples_list, message = FALSE))
+      validate(need(input$targetGenesSampleFiltered, message = FALSE))
       updateSelectizeInput(session, "targetGenesFiltered",
                            label = "'Bait' gene to run correlation analysis with",
                            choices =  array(my_react_vals$filt_samples_list[[input$targetGenesSampleFiltered]]@assays@data@listData$counts@Dimnames[1][[1]]), server = TRUE)
       #my_react_vals$cor_counts <- my_react_vals$filt_samples_list[[input$targetGenesSampleFiltered]]$se@assays@data@listData$counts
     })
     observeEvent(input$targetGenesSampleUnfiltered,{
+    #observe({
       validate(need(calc_se()$my_list, message= FALSE))
+      validate(need(input$targetGenesSampleUnfiltered, message = FALSE))
       #cor_unfiltered2 <<- calc_se()$my_list
       updateSelectizeInput(session, "targetGenesUnfiltered",
                            label = "'Bait' gene to run correlation analysis with",
@@ -1405,23 +1463,24 @@ function(input, output, session){
       #my_react_vals$cor_counts <- calc_se()$my_list[[input$targetGenesSampleUnfiltered]]$se@assays@data@listData$counts
     })
     observeEvent(input$targetGenesSampleClustered,{
-      validate(need(gen_cluster_res()[1][[1]], message = FALSE))
+   #observe({
+      validate(need(my_react_vals$gen_cluster_res[1][[1]], message = FALSE))
       updateSelectInput(inputId="targetGenesCluster",
                         label = "Choose a cell cluster",
-                        choices =  levels(subset(gen_cluster_res()[1][[1]], subset = orig.ident == input$targetGenesSampleClustered)$celltype),
+                        choices =  levels(subset(my_react_vals$gen_cluster_res[1][[1]], subset = orig.ident == input$targetGenesSampleClustered)$celltype),
                         selected = NULL)  
       
-    })
+    })#%>% bindEvent(input$targetGenesSampleClustered, ignoreInit = TRUE, ignoreNULL = TRUE)
       
     observeEvent(input$targetGenesCluster,{
-      
-      validate(need(gen_cluster_res()[1][[1]], message = FALSE))
+     #observe({ 
+      validate(need(my_react_vals$gen_cluster_res[1][[1]], message = FALSE))
       #update gene choices
       updateSelectizeInput(session, "targetGenes",
                            label = "'Bait' gene to run correlation analysis with",
-                           choices =  array(subset(gen_cluster_res()[1][[1]],  orig.ident == input$targetGenesSampleClustered & celltype == input$targetGenesCluster)@assays$RNA$counts@Dimnames[1][[1]]), server = TRUE)
+                           choices =  array(subset(my_react_vals$gen_cluster_res[1][[1]],  orig.ident == input$targetGenesSampleClustered & celltype == input$targetGenesCluster)@assays$RNA$counts@Dimnames[1][[1]]), server = TRUE)
       #my_react_vals$cor_counts = subset(gen_cluster_res()[1][[1]],  orig.ident == input$targetGenesSampleClustered & celltype == input$targetGenesCluster)@assays$RNA$counts
-    }, ignoreInit = TRUE, ignoreNULL = TRUE)
+    })#%>% bindEvent(input$targetGenesCluster, ignoreInit = TRUE, ignoreNULL = TRUE)#, ignoreInit = TRUE, ignoreNULL = TRUE)
     
     
     #observeEvent(my_react_vals$cor_sample,{
@@ -1496,7 +1555,7 @@ function(input, output, session){
       cat(paste0("Running analysis with cell type cluster:", input$targetGenesCluster))
       #cor_dat_clustered <<-subset(gen_cluster_res()[1][[1]],  orig.ident == input$targetGenesSampleClustered & celltype == input$targetGenesCluster)@assays$RNA$counts
       my_react_vals$iRNA_cor_tables <- tryCatch({ ############## <<- #############################
-        iRNA_cluster(subset(gen_cluster_res()[1][[1]],  orig.ident == input$targetGenesSampleClustered & celltype == input$targetGenesCluster)@assays$RNA$counts, input$method, input$alpha, input$geneSparsity, input$targetGenes, input$correlation_threshold, input$targetGenesCluster)
+        iRNA_cluster(subset(my_react_vals$gen_cluster_res[1][[1]],  orig.ident == input$targetGenesSampleClustered & celltype == input$targetGenesCluster)@assays$RNA$counts, input$method, input$alpha, input$geneSparsity, input$targetGenes, input$correlation_threshold, input$targetGenesCluster)
         #iRNA_cluster(loaded.dataSO.combined, input$method, input$alpha, input$geneSparsity, input$targetGenes, input$correlation_threshold, input$selectCluster)
         
         },

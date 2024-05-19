@@ -14,6 +14,12 @@ filter_cells <- function(raw_data, metrics, minUMIsPerCell, maxUMIsPerCell, minG
   #my_se_c <- calc_se()$se
   my_se_c <- raw_data
   #return filtered data
-  return(c(se = my_se_c[ ,filt_cells],
-    mes= "Data filtered"))
+  if(dim(my_se_c[ ,filt_cells])[[2]] == 0){
+    return(c(se = my_se_c[ ,filt_cells],
+             mes= "There are no cells left after filtering. You have to change your filtering thresholds"))
+  }else{
+    return(c(se = my_se_c[ ,filt_cells],
+             mes= "Data filtered"))
+  }
+  
 }

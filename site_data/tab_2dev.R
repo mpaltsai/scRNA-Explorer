@@ -10,6 +10,7 @@ tab2 <-tabPanel("Quality Control Plots",
              selectInput("selectSample", "Choose a sample", "", selected = NULL),
              actionButton("makeMetrics", 'Create metrics'),
              span(textOutput("createdMetrics") %>% withSpinner(), style = "color:dodgerblue"),
+             #span(textOutput("createdMetrics"), style = "color:dodgerblue"),
              helpText("Now we can inspect these metrics to assess the quality of cells sequenced"),
              actionButton("drawPlots", "Show plots")
              

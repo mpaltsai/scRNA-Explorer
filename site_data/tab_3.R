@@ -1,6 +1,7 @@
 tab3 <- tabPanel("Gene correlation",
                  sidebarLayout(
                    sidebarPanel(
+
                      ### Correlation method ###
                      radioButtons(inputId= "method", label = "Which correlation method do you want to apply?",
                                   choices = c("Pearson"= "pearson", "Kendall" = "kendall", "Spearman" = "spearman"), selected = character(0), inline=TRUE),
