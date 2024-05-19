@@ -16,5 +16,6 @@ x <- c("dplyr",
        "DT", 
        "gprofiler2", 
        "presto", 
-       "matrixTests")
+       "matrixTests",
+       "enrichR")
 invisible(lapply(x, suppressPackageStartupMessages(library), character.only = TRUE))
