@@ -9,8 +9,8 @@ tab2 <-tabPanel("Quality Control Plots",
              helpText(strong("First of all we have to create the metrics for visualizations")),
              selectInput("selectSample", "Choose a sample", "", selected = NULL),
              actionButton("makeMetrics", 'Create metrics'),
-             span(textOutput("createdMetrics") %>% withSpinner(), style = "color:dodgerblue"),
-             #span(textOutput("createdMetrics"), style = "color:dodgerblue"),
+             #span(textOutput("createdMetrics") %>% withSpinner(), style = "color:dodgerblue"),
+             span(textOutput("createdMetrics"), style = "color:dodgerblue"),
              helpText("Now we can inspect these metrics to assess the quality of cells sequenced"),
              actionButton("drawPlots", "Show plots")
              
@@ -49,13 +49,13 @@ tab2 <-tabPanel("Quality Control Plots",
     column(4,
            wellPanel(
            #number of UMIs/transcripts per cell
-           plotOutput("UMIsPlot")%>% withSpinner()
+           plotOutput("UMIsPlot")#%>% withSpinner()
            )
       
     ),
     column(4,
            wellPanel(
-             plotOutput("UMIsPlotFiltered")%>% withSpinner()
+             plotOutput("UMIsPlotFiltered")#%>% withSpinner()
            )
       
     )
@@ -81,12 +81,14 @@ tab2 <-tabPanel("Quality Control Plots",
     column(4,
            wellPanel(
              #number of genes per cell histogram
-             plotOutput("GenesHistPlot")%>% withSpinner()
+             plotOutput("GenesHistPlot")#%>% withSpinner()
            )
         ),
     column(4,
            wellPanel(
-           plotOutput("GenesHistPlotFiltered")%>% withSpinner()))
+           plotOutput("GenesHistPlotFiltered")#%>% withSpinner()
+           )
+           )
       ),
   
   #genes per cell boxplot
@@ -102,12 +104,12 @@ tab2 <-tabPanel("Quality Control Plots",
     column(4,
            wellPanel(
              #number of genes per cell boxplot
-             plotOutput("GenesBoxPlot")%>% withSpinner()
+             plotOutput("GenesBoxPlot")#%>% withSpinner()
            )
     ),
     column(4,
            wellPanel(
-             plotOutput("GenesBoxPlotFiltered")%>% withSpinner()
+             plotOutput("GenesBoxPlotFiltered")#%>% withSpinner()
            ))
   ),
 
@@ -128,12 +130,12 @@ tab2 <-tabPanel("Quality Control Plots",
   column(4,
          wellPanel(
            #number of UMIs vs Genes per cell 
-           plotOutput("UMIsGenesPlot")%>% withSpinner()
+           plotOutput("UMIsGenesPlot")#%>% withSpinner()
          )
   ),
   column(4,
          wellPanel(
-           plotOutput("UMIsGenesPlotFiltered")%>% withSpinner()
+           plotOutput("UMIsGenesPlotFiltered")#%>% withSpinner()
          ))
   ),
 
@@ -154,12 +156,12 @@ tab2 <-tabPanel("Quality Control Plots",
     column(4,
            wellPanel(
              #number of UMIs vs Genes per cell with rbcRatio
-             plotOutput("UMIsGenesPlotRBC")%>% withSpinner()
+             plotOutput("UMIsGenesPlotRBC")#%>% withSpinner()
            )
     ),
     column(4,
            wellPanel(
-             plotOutput("UMIsGenesPlotRBCFiltered")%>% withSpinner()
+             plotOutput("UMIsGenesPlotRBCFiltered")#%>% withSpinner()
            ))
   ),
   
@@ -180,12 +182,12 @@ tab2 <-tabPanel("Quality Control Plots",
     column(4,
            wellPanel(
              #number of UMIs vs Genes per cell with rbcRatio
-             plotOutput("mitoRatioPlot")%>% withSpinner()
+             plotOutput("mitoRatioPlot")#%>% withSpinner()
            )
     ),
     column(4,
            wellPanel(
-             plotOutput("mitoRatioPlotFiltered")%>% withSpinner()
+             plotOutput("mitoRatioPlotFiltered")#%>% withSpinner()
            ))
   ),
 
@@ -206,12 +208,12 @@ tab2 <-tabPanel("Quality Control Plots",
     column(4,
            wellPanel(
              #number of UMIs vs Genes per cell with rbcRatio
-             plotOutput("rbcRatioPlot")%>% withSpinner()
+             plotOutput("rbcRatioPlot")#%>% withSpinner()
            )
     ),
     column(4,
            wellPanel(
-             plotOutput("rbcRatioPlotFiltered")%>% withSpinner()
+             plotOutput("rbcRatioPlotFiltered")#%>% withSpinner()
            ))
   ),
 
@@ -232,12 +234,12 @@ tab2 <-tabPanel("Quality Control Plots",
     column(4,
            wellPanel(
              #number of UMIs vs Genes per cell with rbcRatio
-             plotOutput("noveltyPlot")%>% withSpinner()
+             plotOutput("noveltyPlot")#%>% withSpinner()
            )
     ),
     column(4,
           wellPanel(
-            plotOutput("noveltyPlotFiltered")%>% withSpinner()
+            plotOutput("noveltyPlotFiltered")#%>% withSpinner()
           ))
   ),
   #Plot an overview of expression for each cell
@@ -246,18 +248,19 @@ tab2 <-tabPanel("Quality Control Plots",
            wellPanel(
            helpText("Plot the relative proportion of the library size that is accounted for by the 300 most highly expressed features for each cell"),
            actionButton("makeLibrary", "Plot overview of expression per cell (unfiltered)"),
-           actionButton("makeLibraryFiltered", "Plot overview of expression per cell (filtered)")
+           actionButton("makeLibraryFiltered", "Plot overview of expression per cell (filtered)"),
+           helpText("This might take some time")
             )
            ),
     column(4,
            wellPanel(
-             plotOutput("libraryPlot")%>% withSpinner()
+             plotOutput("libraryPlot")#%>% withSpinner()
              )
            
            ),
     column(4,
            wellPanel(
-             plotOutput("libraryPlotFiltered")%>% withSpinner()
+             plotOutput("libraryPlotFiltered")#%>% withSpinner()
            ))
   ),
 
@@ -267,19 +270,20 @@ tab2 <-tabPanel("Quality Control Plots",
            wellPanel(
              helpText("Plot highest expressed genes"),
              actionButton("makeHighExpr", "Plot highest expressed genes (unfiltered)"),
-             actionButton("makeHighExprFiltered", "Plot highest expressed genes (filtered)")
+             actionButton("makeHighExprFiltered", "Plot highest expressed genes (filtered)"),
+             helpText("This might take some time")
              
            )),
     column(4,
            wellPanel(
              actionButton("zoomhighExprPlot", "Zoom in"),
-             plotOutput("highExprPlot")%>% withSpinner()
+             plotOutput("highExprPlot")#%>% withSpinner()
              
            )),
     column(4,
            wellPanel(
              actionButton("zoomhighExprPlotFiltered", "Zoom in"),
-             plotOutput("highExprPlotFiltered")%>% withSpinner()
+             plotOutput("highExprPlotFiltered")#%>% withSpinner()
            ))
   ),
 
@@ -323,7 +327,8 @@ tab2 <-tabPanel("Quality Control Plots",
            wellPanel(
              helpText(strong("Now we can filter out low quality reads using selected thresholds")),
              actionButton("QCFiltering", "Filter cells"),
-             span(textOutput("QCDataFilt") %>% withSpinner(), style = "color:dodgerblue"),
+             #span(textOutput("QCDataFilt") %>% withSpinner(), style = "color:dodgerblue"),
+             span(textOutput("QCDataFilt"), style = "color:dodgerblue"),
              
              #save data as rds object
              helpText(strong("You can save filtered data with metadata in a Rds object")),
@@ -338,11 +343,14 @@ tab2 <-tabPanel("Quality Control Plots",
              helpText(strong("Now we have filtered out cells we can redraw plots to assess our thresholds")),
              helpText(strong("But first we have to re-compute our metrics")),
              actionButton("filt_metrics", "Metrics of filtered data"),
-             span(textOutput("metricsFilt") %>% withSpinner(), style = "color:dodgerblue"),
+             #span(textOutput("metricsFilt") %>% withSpinner(), style = "color:dodgerblue"),
+             span(textOutput("metricsFilt"), style = "color:dodgerblue"),
              actionButton("redrawPlots", "Plots with filtered cells")
            ))
            
-  )
+  ),
+  fluidRow(column(12,
+                  wellPanel("scRNA-Explorer is licensed under the GNU General Public License v3.0")))
 
 
 

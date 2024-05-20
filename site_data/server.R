@@ -9,12 +9,9 @@
 
 library(shiny)
 library(shinyjs)
-#library(tools)
-#library(dplyr)
-#library(utils)
 
 
-options(shiny.maxRequestSize=15000*1024^2)  #max upload file size 15GB
+options(shiny.maxRequestSize=10000*1024^2)  #max upload file size 10GB
 
 function(input, output, session){
   
@@ -170,6 +167,7 @@ function(input, output, session){
         my_react_vals$iRNA_enrich_tables <- NULL
         #metrics_clean() <- NULL
         #se_c() <- NULL
+        #output$UMIsPlot <- renderPlot({NULL})
         
 
       }
@@ -329,23 +327,13 @@ function(input, output, session){
           }
         }
       }
-    #if(input$typeData == 4){
-    #    d_to_filter <- calc_metadata()$my_list
-     #   my_filter_list <- c(my_list = list(initial_filt(list_samples = d_to_filter, TRUE)),
-    #                           mes = "Minimal filtering completed")
-    #    
-    #  }else{
-    #    d_to_filter <- calc_metadata()$my_list
-    #    my_filter_list <- c(my_list = list(initial_filt(list_samples = d_to_filter, FALSE)),
-    #                         mes = "Minimal filtering completed")
-     # }
 
       })%>% bindEvent(input$initFiltering, ignoreInit = TRUE, ignoreNULL = TRUE)
     
     observeEvent(input$initFiltering, {
-      #my_calc_se <<- calc_se() ############## <<- #############################
+      #my_sample_one <<- calc_se()$my_list[["sample"]]$se ############## <<- #############################
       output$initDataFilt<- renderText({
-
+        
         calc_se()$mes
       
       }) 
@@ -353,12 +341,18 @@ function(input, output, session){
     
     #save and download as rds
     output$initDownload <- 
+      
       downloadHandler(
         filename = function() {
           paste0("init_filt_data_",  Sys.Date(), ".rds")
         },
-        content = function(file) {
-          saveRDS(calc_se()$my_list, file)
+        content = function(filename) {
+          if(my_react_vals$multiple_case){
+            saveRDS(calc_se()$my_list, filename)
+          }else{
+            saveRDS(calc_se()$my_list[["sample"]]$se, filename)
+          }
+          #saveRDS(calc_se()$my_list, file)
         }
       )
   
@@ -434,29 +428,110 @@ function(input, output, session){
       
     })
     
-  #number of UMIs per cell
-  #update slider min and max values
-   #observe({
-  #  updateSliderInput(session,"nUMIs", "Number of UMIs:",
-   #                   min = 0, max = max(calc_metrics()$nUMI), value = c(min(calc_metrics()$nUMI),max(calc_metrics()$nUMI)), step = 10)
-  #}) %>% bindEvent(input$makeNBUMIs , ignoreInit = TRUE, ignoreNULL = TRUE)
-  
-  
+    #create observers to toggle plots and text output when input data change
+    
+    showPlot <- reactiveVal(TRUE)
+    showFilteredPlot <- reactiveVal(TRUE)
+    showcreatedMetrics <- reactiveVal(TRUE)
+    showQCDataFilt <- reactiveVal(TRUE)
+    showmetricsFilt <- reactiveVal(TRUE)
+    showlibraryPlot <- reactiveVal(TRUE)
+    showlibraryPlotFiltered <- reactiveVal(TRUE)
+    showhighExprPlot <- reactiveVal(TRUE)
+    showhighExprPlotFiltered <- reactiveVal(TRUE)
+    
+    observeEvent(input$startQC, {
+      if(input$startQC>1){
+        showPlot(FALSE) 
+        showFilteredPlot(FALSE)
+        showcreatedMetrics(FALSE)
+        showQCDataFilt(FALSE)
+        showmetricsFilt(FALSE)
+        showlibraryPlot(FALSE)
+        showlibraryPlotFiltered(FALSE)
+        showhighExprPlot(FALSE)
+        showhighExprPlotFiltered(FALSE)
+      }
+    })
+    observeEvent(input$drawPlots, {
+      showPlot(TRUE) 
+    })
+    observeEvent(input$redrawPlots, {
+      showFilteredPlot(TRUE) 
+    })
+    observeEvent(input$makeLibrary, {
+      showlibraryPlot(TRUE) 
+    })
+    observe({
+      toggle(id = "libraryPlot", condition = showlibraryPlot())
+    })
+    observeEvent(input$makeLibraryFiltered, {
+      showlibraryPlotFiltered(TRUE) 
+    })
+    observe({
+      toggle(id = "libraryPlotFiltered", condition = showlibraryPlotFiltered())
+    })
+    observeEvent(input$makeHighExpr, {
+      showhighExprPlot(TRUE) 
+    })
+    observe({
+      toggle(id = "highExprPlot", condition = showhighExprPlot())
+    })
+    observeEvent(input$makeHighExprFiltered, {
+      showhighExprPlotFiltered(TRUE) 
+    })
+    observe({
+      toggle(id = "highExprPlotFiltered", condition = showhighExprPlotFiltered())
+    })
+    #show and hide plots depending on button pressed from previous observers
+    observe({
+      toggle_filt_plots <- function(x){
+        toggle(x, condition = showFilteredPlot())
+      }
+      mapply(toggle_filt_plots, c("UMIsPlotFiltered", "GenesHistPlotFiltered", "GenesBoxPlotFiltered", "UMIsGenesPlotFiltered", "UMIsGenesPlotRBCFiltered", 
+                             "mitoRatioPlotFiltered", "rbcRatioPlotFiltered", 
+                             "noveltyPlotFiltered", "libraryPlotFiltered", "highExprPlotFiltered"))
+      #toggle(id = "UMIsPlot", condition = showPlot())
+    })
+    
+    observe({
+      toggle_plots <- function(x){
+        toggle(x, condition = showPlot())
+      }
+      mapply(toggle_plots, c("UMIsPlot", "GenesHistPlot", "GenesBoxPlot", "UMIsGenesPlot", "UMIsGenesPlotRBC", "mitoRatioPlot", "rbcRatioPlot", 
+                             "noveltyPlot", "libraryPlot", "highExprPlot"))
+      #toggle(id = "UMIsPlot", condition = showPlot())
+    })
+
+    observeEvent(c(input$makeMetrics),{
+      showcreatedMetrics(TRUE)
+    })
+    observeEvent(c(input$QCFiltering),{
+      showQCDataFilt(TRUE)
+    })
+    observeEvent(c(input$filt_metrics),{
+      showmetricsFilt(TRUE)
+    })
+    observe({
+      toggle(id = "createdMetrics", condition = showcreatedMetrics())
+    })
+    observe({
+      toggle(id = "QCDataFilt", condition = showQCDataFilt())
+    })
+    observe({
+      toggle(id = "metricsFilt", condition = showmetricsFilt())
+    })
+    
   output$UMIsPlot <- renderPlot({
       validate(need(calc_metrics(), message= "You have to compute metrics for your sample first"))
-
+      #req(hidePlot())
       createUMIsPlot(calc_metrics(), input$nUMIs[1], input$nUMIs[2])
       
-    })%>% bindEvent(c(input$drawPlots, input$nUMIs) , ignoreInit = TRUE, ignoreNULL = TRUE)
+    })%>% bindEvent(c(input$drawPlots, input$nUMIs) , ignoreInit = TRUE, ignoreNULL = TRUE) 
   
   #})%>% bindEvent(c(input$makeNBUMIs, input$nUMIs) , ignoreInit = TRUE, ignoreNULL = TRUE)
   
-  #nGenes histogram
-  #observe({
-    #updateSliderInput(session, "nGenes", "Number of genes:",
-    #                  min = 0, max = max(calc_metrics()$nGene), value = c(min(calc_metrics()$nGene),max(calc_metrics()$nGene)), step = 10)
-  #}) %>% bindEvent(input$makeNBgenesHist , ignoreInit = TRUE, ignoreNULL = TRUE)
-  
+
   output$GenesHistPlot<- renderPlot({
     validate(need(calc_metrics(), message= "You have to compute metrics for your sample first"))
     createGenesHistPlot(calc_metrics(), input$nGenes[1], input$nGenes[2])
@@ -470,12 +545,7 @@ function(input, output, session){
   })%>% bindEvent(c(input$drawPlots) , ignoreInit = TRUE, ignoreNULL = TRUE)  
   #})%>% bindEvent(c(input$makeNBgenesBoxPlot) , ignoreInit = TRUE, ignoreNULL = TRUE)
   
-  #UMIs vs nGenes with mitoRatio
-  #observe({
-    #updateSliderInput(session,"nUMIsVSnGenes", "Genes detected:",
-   #                   min = 0, max = max(calc_metrics()$nGene), value = c(min(calc_metrics()$nGene),max(calc_metrics()$nGene)), step = 10)
-  #})%>% bindEvent(input$makeUMIsGenes , ignoreInit = TRUE, ignoreNULL = TRUE)
-  
+
   output$UMIsGenesPlot <- renderPlot({
     validate(need(calc_metrics(), message= "You have to compute metrics for your sample first"))
     createUMIsGenesPlot(calc_metrics(), input$nUMIsVSnGenes[1], input$nUMIsVSnGenes[2])
@@ -483,23 +553,13 @@ function(input, output, session){
   #})%>% bindEvent(c(input$makeUMIsGenes, input$nUMIsVSnGenes) , ignoreInit = TRUE, ignoreNULL = TRUE)
  
   
-  #UMIs vs nGenes with hemoRatio
-  #observe({
-  #  updateSliderInput(session,"nUMIsVSnGenesRBC", "Genes detected:",
-   #                   min = 0, max = max(calc_metrics()$nGene), value = c(min(calc_metrics()$nGene),max(calc_metrics()$nGene)), step = 10)
-  #})%>% bindEvent(input$makeUMIsGenesRBC , ignoreInit = TRUE, ignoreNULL = TRUE)
-  
   output$UMIsGenesPlotRBC <- renderPlot({
     validate(need(calc_metrics(), message= "You have to compute metrics for your sample first"))
     createUMIsGenesPlotRBC(calc_metrics(), input$nUMIsVSnGenesRBC[1], input$nUMIsVSnGenesRBC[2])
   })%>% bindEvent(c(input$drawPlots, input$nUMIsVSnGenesRBC) , ignoreInit = TRUE, ignoreNULL = TRUE)    
   #})%>% bindEvent(c(input$makeUMIsGenesRBC, input$nUMIsVSnGenesRBC) , ignoreInit = TRUE, ignoreNULL = TRUE)
   
-  #plot mitoRatio
-  #observe({
-  #  updateSliderInput(session,"mitoRatio", "Mitochondrial ratio:",
-   #                   min = 0, max = round(max(calc_metrics()$mitoRatio), digits = 5), value = c(round(min(calc_metrics()$mitoRatio),digits = 5),round(max(calc_metrics()$mitoRatio), digits = 5)), step = 0.0001)
- # })%>% bindEvent(input$makemitoRatio , ignoreInit = TRUE, ignoreNULL = TRUE)
+
   
   output$mitoRatioPlot <- renderPlot({
     validate(need(calc_metrics(), message= "You have to compute metrics for your sample first"))
@@ -508,11 +568,7 @@ function(input, output, session){
   #})%>% bindEvent(c(input$makemitoRatio, input$mitoRatio) , ignoreInit = TRUE, ignoreNULL = TRUE)
   
   #plot hemoRatio
-  #observe({
-   # updateSliderInput(session,"rbcRatio", "Hemoglobins ratio:",
-  #                    min = 0, max = round(max(calc_metrics()$rbcRatio), digits = 5), value = c(round(min(calc_metrics()$rbcRatio),digits = 5),round(max(calc_metrics()$rbcRatio), digits = 5)), step = 0.0001)
-  #})%>% bindEvent(input$makerbcRatio , ignoreInit = TRUE, ignoreNULL = TRUE)
-  
+
   output$rbcRatioPlot <- renderPlot({
     validate(need(calc_metrics(), message= "You have to compute metrics for your sample first"))
     createrbcRatioPlot(calc_metrics(), input$rbcRatio[1], input$rbcRatio[2])
@@ -520,11 +576,7 @@ function(input, output, session){
   #})%>% bindEvent(c(input$makerbcRatio, input$rbcRatio) , ignoreInit = TRUE, ignoreNULL = TRUE)
   
   #Genes vs UMIs
-  #observe({
-   # updateSliderInput(session,"novelty", "Genes detected per UMI:",
-   #                   min = 0, max = round(max(calc_metrics()$log10GenesPerUMI), digits = 2), value = round(min(calc_metrics()$log10GenesPerUMI),digits = 2), step = 0.01)
-  #})%>% bindEvent(input$makeNovelty , ignoreInit = TRUE, ignoreNULL = TRUE)
-  
+
   output$noveltyPlot <- renderPlot({
     validate(need(calc_metrics(), message= "You have to compute metrics for your sample first"))
     createnoveltyPlot(calc_metrics(), input$novelty[1], input$novelty[2])
@@ -540,6 +592,7 @@ function(input, output, session){
   
   
   output$libraryPlot <- renderPlot({
+    req(showlibraryPlot())
     validate(need(calc_se()$my_list, message= "You have to complete initial filtering first"))
     scater_plot()
   })
@@ -552,6 +605,7 @@ function(input, output, session){
   })%>%bindEvent(input$makeHighExpr, ignoreInit = TRUE, ignoreNULL = TRUE)
   
   output$highExprPlot <- renderPlot({
+    req(showlibraryPlotFiltered())
     validate(need(calc_se()$my_list, message= "You have to complete initial filtering first"))
     highest_expr_plot()
   })
@@ -794,6 +848,7 @@ function(input, output, session){
   
   #library plot
   output$libraryPlotFiltered <- renderPlot({
+    req(showhighExprPlot())
     validate(need(se_c()$se, message = "You have to filter out cells first"))
     createlibraryPlot(se_c()$se)
     
@@ -806,6 +861,7 @@ function(input, output, session){
   })%>%bindEvent(input$makeHighExprFiltered , ignoreInit = TRUE, ignoreNULL = TRUE)
   
   output$highExprPlotFiltered <- renderPlot({
+    req(showhighExprPlotFiltered())
     validate(need(se_c()$se, message = "You have to filter out cells first"))
     highest_expr_plot_filtered()
   })
@@ -1057,7 +1113,7 @@ function(input, output, session){
     validate(need(my_react_vals$loaded.dataSO.combined.no.cluster@meta.data$seurat_clusters, message = FALSE))
     #my_merged_seurat_clust <<- my_react_vals$loaded.dataSO.combined.no.cluster
     if(!is.null(my_react_vals$loaded.dataSO.combined.no.cluster@meta.data$seurat_clusters)){
-      "Clusters identified"
+      paste0("Clusters identified n=", length(levels(my_react_vals$loaded.dataSO.combined.no.cluster@meta.data$seurat_clusters)))
     }else{
       validate(FALSE, "You have to compute nearest neighbors first")
     }

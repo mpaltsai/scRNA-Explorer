@@ -22,7 +22,7 @@ your_count_matrix <- read.csv(your_filepath, header = TRUE, row.names = 1, sep =
 # tsv
 your_count_matrix <- read.csv(your_filepath, header = TRUE, row.names = 1, sep = "\t")
 ```
-Otherwise, and recommended for large files, you can use fread function from package data.table \
+Otherwise, and recommended for large files, you can use fread function from package data.table 
 
 ```{r}
 # If not installed already, run:
@@ -54,8 +54,29 @@ saveRDS(se_counts, paste0("the_desired_filename"))
 Now you are ready to upload your count matrix in as an RDS object to scRNA-Explorer
 
 ***
+#### Multiple samples
+In the case where there are multiple samples to be analysed, a zipped directory can serve as an input, \
+choosing the "multiple samples" radio button when uploading data. Sub directories are dedicated to each \
+sample, named by the sample. Inside each sub directory one of the following should be present: 
+1. a count matrix in tsv/csv format or 
+2. an rds object (either derived from scRNA-Explorer for a single sample, or as described above) or 
+3. the three files from CellRanger pipeline (< version 3.0) with the exact names:  
+  features.tsv (or genes.tsv) that corresponds to genes, \
+  barcodes.tsv that corresponds to barcodes and \
+  matrix.tsv that corresponds to the count matrix.
+***
+
+***
 #### Upload size limit
 There is a size limit set to 10 GB for uploads.
+***
+
+***
+#### Computation time
+Some steps of the analysis (two last QC plots and some procedures in Cell type clustering) may take some time 
+and this is proportional to the number of cells present in the assay.
+With the test data set, and 2000 cells after filtering, the whole analysis, from data reading to the enrichment 
+results for Twist2 gene, needs less than 4 minutes. 
 ***
 
 scRNA-Explorer has been developed on reactive modules. \
@@ -64,3 +85,6 @@ Messages return when processes complete successfully, otherwise process failure 
 If you encounter any problem, or have a suggestion, please contact us: \
 ibaltsavia@gmail.com \
 iliopj@med.uoc.gr
+
+***
+## scRNA-Explorer is licensed under the GNU General Public License v3.0

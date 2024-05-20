@@ -267,6 +267,11 @@ tab2_cell_clusters <-tabPanel("Cell type clustering",
                          ),
                   )
                 ),
+               
+               fluidRow(
+                 column(12,
+                        wellPanel("scRNA-Explorer is licensed under the GNU General Public License v3.0"))
+               )
                 
                 
 )#end of tabPanel

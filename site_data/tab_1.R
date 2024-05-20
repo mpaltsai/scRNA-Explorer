@@ -105,12 +105,15 @@ tab1<-     tabPanel("Data input/preprocessing",
                         helpText("Now we'll save data with metadata in a Rds object"),
                         #textInput(inputId="dataName", "Please provide a name for your dataset", 
                         #          value = "Enter a name..."),
-                        helpText("You can download the Rds object (optional but helpful)"),
+                        helpText("You can download your data in as an Rds object (optional)"),
                         #actionButton("initDownload", 'Save Rds object'),
-                        downloadButton("initDownload", 'Save Rds object')
+                        downloadButton("initDownload", 'Save Rds object'),
                         #span(textOutput("dataNameValidation")%>% withSpinner(), style = "color:dodgerblue"),
-                        
-                        
+                        helpText("Note:"), 
+                        helpText("In the case of multiple samples a list of samples will be downloaded"),
+                        helpText("This kind of Rds cannot be accepted as an input to scRNA-Explorer"),
+                        helpText("Only Rds objects with single samples can be accepted as input"),
+                        helpText("In the case of multiple samples you can download each sample separately in an Rds after filtering out cells (in the QC Plots tab)")
                         
                       ),
                       

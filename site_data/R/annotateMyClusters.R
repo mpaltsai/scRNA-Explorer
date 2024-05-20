@@ -10,6 +10,8 @@ annotateMyClusters <- function(x, a, b, c, d){
   
   loaded.dataSO.combined.markers = d
   
+  listEnrichrSites()
+  
   if(getOption("enrichR.live")){
     setEnrichrSite("Enrichr") # Human genes
     annotatedclusters <-c()
