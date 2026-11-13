@@ -52,14 +52,18 @@ iRNA_cluster <- function(sce, method, alpha, geneSparsity, targetGenes, correlat
   #capitalize genes names in the seurat object
   #rownames(x=seurat.sub.nonzero$RNA) <- toupper(rownames(x=seurat.sub.nonzero$RNA))
   #seurat.sub.nonzero$RNA@counts@Dimnames[1][[1]] <- toupper(dimnames(seurat.sub.nonzero)[1][[1]])
-  dimnames(seurat.sub.nonzero)[1][[1]] <- toupper(dimnames(seurat.sub.nonzero)[1][[1]])
+  
+  #Ismini: have to comment it out because produces duplicate gene names downstream
+  #dimnames(seurat.sub.nonzero)[1][[1]] <- toupper(dimnames(seurat.sub.nonzero)[1][[1]])
   
   
   
   #set target genes
-  genes.incl = strsplit(targetGenes, ",")
-  genes.incl = genes.incl[[1]]
-  genes.incl = toupper(genes.incl)
+  #Ismini: have to comment it out because produces duplicate gene names downstream
+  # genes.incl = strsplit(targetGenes, ",")
+  # genes.incl = genes.incl[[1]]
+  # genes.incl = toupper(genes.incl)
+  genes.incl <- trimws(strsplit(targetGenes, ",")[[1]])
   
   message("\nAnalysis will run with ", length(genes.incl), " gene(s): ", genes.incl, " against cluster ", cluster.type, "\n")
   
@@ -89,15 +93,45 @@ iRNA_cluster <- function(sce, method, alpha, geneSparsity, targetGenes, correlat
     selectedGene         = genes.incl[x]
     message("\n ------Working on ", selectedGene, "------")
     
-    refRowIndex = which(row.names(seurat.sub.nonzero)==selectedGene)
+    #refRowIndex = which(row.names(seurat.sub.nonzero)==selectedGene)
+    features <- rownames(seurat.sub.nonzero)
+    
+    # Prefer an exact match
+    refRowIndex <- which(features == selectedGene)
+    
+    # Otherwise, use case-insensitive matching
+    if (length(refRowIndex) == 0L) {
+      refRowIndex <- which(
+        toupper(features) == toupper(selectedGene)
+      )
+      
+      if (length(refRowIndex) > 1L) {
+        stop(
+          "Ambiguous gene identifier: ", selectedGene,
+          ". Matches: ",
+          paste(features[refRowIndex], collapse = ", ")
+        )
+      }
+    }
+    
+    if (length(refRowIndex) == 1L) {
+      selectedGene <- features[refRowIndex]
+    }
+    
     
     #in case a target gene is not included in the assay (or after the subsetting of the matrix)
-    if(length(refRowIndex)==0){ 
-      message("\n ERROR: the selected gene ", selectedGene, " is not included in the RNA-seq assay\n")
-      #Not for shiny:message("\n ERROR: the selected gene ", selectedGene, " is not included in the RNA-seq assay\n Proceeding to the next gene")
+
+    if (length(refRowIndex) == 0L) {
+      message(
+        "\n ERROR: the selected gene ",
+        selectedGene,
+        " is not included in the RNA-seq assay\n"
+      )
       next
     }
     
+    # Preserve the original feature name for subsequent matrix operations
+    selectedGene <- features[refRowIndex]
     ######subsetting data##############
     
     #the row of the selected gene is in table div
@@ -157,6 +191,16 @@ iRNA_cluster <- function(sce, method, alpha, geneSparsity, targetGenes, correlat
     #F.t = as.matrix(t(F[["RNA"]]@data))
     F.t = as.matrix(t(F@assays$RNA$data))
     
+    if (!identical(colnames(F.t), rownames(F)) ||
+        !identical(rownames(F.t), colnames(F))) {
+      
+      warning(
+        "Correlation analysis skipped: gene or cell ordering mismatch detected."
+      )
+      
+      next  # Skip the current bait gene
+    }
+    
     #make a function to suppress warnings
     cor.fun <- function(){
       #initialize a matrix to keep the results of the correlation test and the wilcoxon test
@@ -168,13 +212,16 @@ iRNA_cluster <- function(sce, method, alpha, geneSparsity, targetGenes, correlat
         
         #run the correlation test
         corr.output =  corr.test(as.numeric(Eb.t), as.numeric(F.t[,j]), method = paramCorrMethod, 
-                                 adjust = "fdr", alpha = alpha.level, ci = FALSE )
+                                 adjust = "none", alpha = alpha.level, ci = FALSE )
         #append results to corr.matrix
         #corr.matrix[j,1] = colnames(F.t)[j]
         corr.matrix[j,1] = corr.output$r
         corr.matrix[j,2] = corr.output$p
         
       }
+      # Correct across all tested genes for this bait gene, before filtering.
+      # The p_r column now contains BH-adjusted correlation p-values.
+      corr.matrix[, "p_r"] <- p.adjust(as.numeric(corr.matrix[, "p_r"]), method = "BH")
       corr.matrix
     }
     #alpha.level = 0.05
@@ -245,7 +292,9 @@ iRNA_cluster <- function(sce, method, alpha, geneSparsity, targetGenes, correlat
     #run Wilcoxon test
     XY_wilcoxon_res = matrixTests::row_wilcoxon_twosample(as.matrix(X),as.matrix(Y))
     
-    corr.sign[,3] <- XY_wilcoxon_res$pvalue
+    # Adjust Wilcoxon p-values across the candidate genes tested in this stage.
+    # The p_w column now contains BH-adjusted Wilcoxon p-values.
+    corr.sign[,3] <- p.adjust(XY_wilcoxon_res$pvalue, method = "BH")
     
     #compute percentage of expression for each correlated gene in Ea and Eb (where the bait gene is expressed and where it is not expressed)
     my_percent = function(x){

@@ -1497,10 +1497,15 @@ function(input, output, session){
       
     #}
      #})#, ignoreInit = TRUE, ignoreNULL = TRUE)
-  })%>% bindEvent(input$corData , ignoreInit = TRUE, ignoreNULL = TRUE)
+  })%>% bindEvent(input$corData, ignoreInit = TRUE, ignoreNULL = TRUE)
   
     #observe({
-    observeEvent(input$targetGenesSampleFiltered,{
+    #observeEvent(input$targetGenesSampleFiltered,{
+      observeEvent(
+        list(
+          input$targetGenesSampleFiltered,
+          my_react_vals$filt_samples_list
+        ), {
       validate(need(my_react_vals$filt_samples_list, message = FALSE))
       validate(need(input$targetGenesSampleFiltered, message = FALSE))
       updateSelectizeInput(session, "targetGenesFiltered",
@@ -1508,7 +1513,10 @@ function(input, output, session){
                            choices =  array(my_react_vals$filt_samples_list[[input$targetGenesSampleFiltered]]@assays@data@listData$counts@Dimnames[1][[1]]), server = TRUE)
       #my_react_vals$cor_counts <- my_react_vals$filt_samples_list[[input$targetGenesSampleFiltered]]$se@assays@data@listData$counts
     })
-    observeEvent(input$targetGenesSampleUnfiltered,{
+    observeEvent(list(
+      input$targetGenesSampleUnfiltered,
+      calc_se()
+    ), {
     #observe({
       validate(need(calc_se()$my_list, message= FALSE))
       validate(need(input$targetGenesSampleUnfiltered, message = FALSE))
