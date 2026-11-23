@@ -4,6 +4,7 @@ Working design from the feature-planning interview. Accepted scope is recorded s
 
 ## Accepted direction
 
+- Develop and validate R feature implementations across local datasets before Shiny integration. Whether to extend or rebuild the Shiny app is a later decision. For GSE176031, use the supplied DGE files and GEO metadata, not AnnData; hg19 is user-confirmed. Attach metadata to existing SingleCellExperiment/Seurat objects without replacing their counts or existing fields.
 - Use R for Shiny features, analysis helpers, validation scripts, tests, and benchmarks. Reuse compatible existing R objects and shared readers; the workflow must not require Python execution or a Python runtime.
 - Preserve all existing routines and add new capabilities alongside them.
 - Initially target the new preprocessing workflow at droplet-based, UMI scRNA-seq. This does not remove any existing input support.
