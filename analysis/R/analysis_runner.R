@@ -60,8 +60,10 @@
   if (!is.character(paths) || anyNA(paths) || any(!file.exists(paths)) || any(dir.exists(paths))) {
     stop("Diagnostic evidence must reference existing files.")
   }
+  checksum <- unname(tools::md5sum(paths))
+  if (anyNA(checksum)) stop("Diagnostic evidence files must be readable for checksums.")
   data.frame(path = normalizePath(paths, mustWork = TRUE),
-             checksum = unname(tools::md5sum(paths)), stringsAsFactors = FALSE)
+             checksum = checksum, stringsAsFactors = FALSE)
 }
 
 .analysis_write_once <- function(record, path) {
@@ -247,8 +249,12 @@ propose_analysis_step <- function(object, directory, step, execute, parameters =
   manifest <- file.path(directory, "analysis.rds")
   if (!file.exists(manifest)) {
     if (!is.null(parent_run)) stop("A parent result must be explicitly accepted before downstream execution.")
-    if (is.null(input_path) || !file.exists(input_path)) stop("Supply the existing input checkpoint path.")
+    if (!is.character(input_path) || length(input_path) != 1L || is.na(input_path) ||
+        !file.exists(input_path) || dir.exists(input_path) || file.access(input_path, 4L) != 0L) {
+      stop("Supply an existing readable input checkpoint file.")
+    }
     input <- list(path = normalizePath(input_path), checksum = unname(tools::md5sum(input_path)))
+    if (anyNA(input$checksum)) stop("Cannot checksum the input checkpoint file.")
     if (dir.exists(directory) && length(list.files(directory, all.files = TRUE, no.. = TRUE))) {
       stop("Analysis directory is not empty; use a dedicated directory.")
     }

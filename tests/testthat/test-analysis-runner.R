@@ -178,3 +178,11 @@ testthat::test_that("subsetting preserves source metadata but changed cell ident
   changed_ids <- function(object, parameters) { colnames(object) <- c("x", "y", "z"); object }
   testthat::expect_error(propose_analysis_step(f$object, f$directory, "bad-ids", changed_ids), "cell identifiers")
 })
+
+testthat::test_that("a baseline must reference a readable checkpoint file", {
+  f <- runner_fixture()
+  on.exit(unlink(f$root, recursive = TRUE))
+  testthat::expect_error(propose_analysis_step(f$object, f$directory, "qc", runner_qc_step,
+    list(min_umi = 3), input_path = f$root), "checkpoint file")
+  testthat::expect_false(dir.exists(f$directory))
+})
