@@ -4,6 +4,8 @@ Develop and validate R features against local datasets before integrating them i
 
 For stepwise inspection, explicit acceptance/rejection, and a saved decision history, use the [standalone R decision runner](decision-runner.md). It reuses SCE/Seurat objects without automatic full-object checkpoints.
 
+The [existing QC adapter and optional checks](existing-qc-review.md) reuse the app's metadata, plot and filtering helpers and add cell-cycle scoring, capture-aware doublet review, and optional DecontX estimates. The Shiny controls remain unchanged during standalone validation.
+
 ## Register GSE176031
 
 The source is the existing compressed gene-by-cell DGE collection plus its GEO series matrix. This workflow does not use AnnData. The registry contains paths, barcode headers, sample metadata, provenance, and diagnostics; it is not a replacement for SingleCellExperiment or Seurat and contains no expression array.
