@@ -10,6 +10,7 @@ Working design from the feature-planning interview. Accepted scope is recorded s
 - Extend the existing before/after filtering plots to support review of new QC and doublet decisions before exclusions are applied.
 - Preserve original counts and record settings and exclusion reasons for reproducibility.
 - Prioritize annotation and subclustering, followed by condition comparisons.
+- Reuse compatible existing analysis objects, helpers, and fixtures across tickets. Do not create fresh objects or duplicate full matrices solely for ticket boundaries; create derived data only when required by the agreed feature and preserve original data.
 
 ## Confirmed subclustering behavior (Q7)
 

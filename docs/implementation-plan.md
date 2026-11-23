@@ -2,11 +2,15 @@
 
 Status: accepted first-phase scope and sequence, based on decisions Q1–Q28 in [feature-design.md](feature-design.md) and the user's confirmation of shared understanding. Manage changes on the dedicated `feat/qc-and-downstream-extensions` branch. Dependency installation/upgrades and deployment require separate approval; the user requested publication of the planning documents on a new GitHub branch.
 
+The approved breakdown is published as GitHub issues [#1](https://github.com/mpaltsai/scRNA-Explorer/issues/1) through [#27](https://github.com/mpaltsai/scRNA-Explorer/issues/27). Native GitHub blocking relationships determine the available work. The initial independent starting tickets are cell-identity preservation ([#1](https://github.com/mpaltsai/scRNA-Explorer/issues/1)) and the QC dataset/evidence manifest ([#20](https://github.com/mpaltsai/scRNA-Explorer/issues/20)).
+
 ## Outcome and compatibility
 
 Extend the app with optional preprocessing, annotation, and subclustering workflows. Preserve current analytical routines, defaults, plots, and downloads. Users who do not enable new options retain the existing workflow. Necessary cell-identity and metadata corrections are accepted, with legacy-result equivalence checked where no analytical difference is expected.
 
 The threshold recommender remains an opt-in experimental research component until it passes a frozen benchmark protocol. Its research outcomes do not block established additions. Preserve original counts and make exclusion, corrected-count selection, and annotation acceptance explicit actions.
+
+Reuse compatible existing analysis objects, helpers, and fixtures across tickets. Completing a ticket must not require constructing a fresh analysis object or duplicating full expression matrices merely to cross a ticket boundary. Store new metadata/results on the existing analysis where compatible. Materialize derived data only when the feature requires it, such as an explicit subanalysis or accepted corrected counts, while preserving original data. Reuse suitable existing study objects only with established provenance and authorized access; their availability does not establish independent QC truth.
 
 ## Verified repository constraints
 
