@@ -5,6 +5,10 @@
 - Ask before installing, upgrading, or removing software or dependencies; changing shell, system, or global tool settings; deleting my data; or publishing changes externally.
 - Before asking, explain the proposed action, its scope, and how to undo it. Wait for my approval.
 
+## Implementation language
+
+Implement Shiny features, analysis helpers, validation scripts, tests, and benchmarks in R. Reuse compatible existing R analysis objects and shared readers. The agreed workflow does not require Python execution or a Python runtime.
+
 ## Agent skills
 
 ### Issue tracker

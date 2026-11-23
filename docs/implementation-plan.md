@@ -6,6 +6,8 @@ The approved breakdown is published as GitHub issues [#1](https://github.com/mpa
 
 ## Outcome and compatibility
 
+Implement features, analysis helpers, validation scripts, tests, and benchmarks in R, directly compatible with the existing Shiny application and its Seurat/SingleCellExperiment workflow. Reuse compatible existing R objects and shared readers. Use the supplied DGE inputs when needed; saved AnnData files are optional provenance/comparison sources only when an available R-native reader can inspect them without Python. Do not add a Python runtime or require Python-based conversion. Record optional artifact incompatibility instead of rebuilding a full dataset for every ticket; dependency changes still require approval.
+
 Extend the app with optional preprocessing, annotation, and subclustering workflows. Preserve current analytical routines, defaults, plots, and downloads. Users who do not enable new options retain the existing workflow. Necessary cell-identity and metadata corrections are accepted, with legacy-result equivalence checked where no analytical difference is expected.
 
 The threshold recommender remains an opt-in experimental research component until it passes a frozen benchmark protocol. Its research outcomes do not block established additions. Preserve original counts and make exclusion, corrected-count selection, and annotation acceptance explicit actions.

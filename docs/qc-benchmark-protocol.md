@@ -2,6 +2,8 @@
 
 Status: proposed protocol implementing accepted Q19–Q28 principles. No benchmark has been run and no improvement is established. Dataset accessions, numerical operating points, and final ranking rules are research deliverables, to be frozen before held-out evaluation.
 
+Implement the benchmark runners, validation checks, and analysis helpers in R using compatible existing R analysis objects/shared inputs. No Python runtime or Python-based conversion is required. Existing saved outputs may provide provenance or comparisons when accessible with already available R-native tooling; they do not replace independent QC evidence.
+
 ## Question
 
 Can an explainable recommender propose editable QC cutoffs that reduce false exclusions at comparable compromised-cell detection, or improve compromised-cell detection at comparable false exclusion, relative to established baselines? Evaluate rare populations separately. Retaining all cells is not a successful solution to this joint objective.
