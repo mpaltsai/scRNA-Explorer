@@ -156,6 +156,126 @@ attach_geo_sample_metadata <- function(object, registry, accessions) {
   cells
 }
 
+.gse_filename_accessions <- function(files) {
+  names <- basename(files)
+  as.character(ifelse(grepl("^GSM[0-9]+_", names), sub("_.*", "", names), NA_character_))
+}
+
+.gse_walk_counts <- function(input, consume, chunk_rows = 500L) {
+  if (length(chunk_rows) != 1L || !is.numeric(chunk_rows) || is.na(chunk_rows) ||
+      !is.finite(chunk_rows) || chunk_rows < 1 || chunk_rows != floor(chunk_rows)) {
+    stop("chunk_rows must be a positive integer.")
+  }
+  con <- gzfile(input$dge_path, "rt")
+  on.exit(close(con))
+  header <- readLines(con, n = 1L, warn = FALSE)
+  if (!identical(strsplit(header, "\t", fixed = TRUE)[[1]][-1], input$barcodes)) {
+    stop("DGE header changed before count reading.")
+  }
+  seen <- character()
+  repeat {
+    lines <- readLines(con, n = chunk_rows, warn = FALSE)
+    if (!length(lines)) break
+    table <- utils::read.table(text = lines, sep = "\t", header = FALSE, quote = "",
+                               comment.char = "", na.strings = character(),
+                               colClasses = c("character", rep("numeric", length(input$barcodes))),
+                               check.names = FALSE)
+    if (ncol(table) != length(input$barcodes) + 1L) stop("DGE count columns do not match its header.")
+    genes <- table[[1]]
+    if (anyNA(genes) || any(!nzchar(trimws(genes))) || anyDuplicated(c(seen, genes))) {
+      stop("DGE feature identifiers must be nonempty and unique for verified reuse.")
+    }
+    values <- as.matrix(table[-1])
+    if (any(!is.finite(values)) || any(values < 0) || any(values != floor(values))) {
+      stop("DGE values must be finite, nonnegative integer counts.")
+    }
+    dimnames(values) <- list(genes, input$barcodes)
+    consume(genes, values)
+    seen <- c(seen, genes)
+  }
+  if (!length(seen)) stop("DGE file contains no feature rows.")
+  invisible(seen)
+}
+
+read_gse176031_counts <- function(registry, accession, data_root = registry$roots$data,
+                                 chunk_rows = 500L) {
+  if (!requireNamespace("Matrix", quietly = TRUE)) stop("Count import requires an existing Matrix installation.")
+  input <- resolve_gse176031_input(registry, accession, data_root)
+  blocks <- list()
+  .gse_walk_counts(input, function(genes, values) {
+    nonzero <- which(values != 0, arr.ind = TRUE)
+    blocks[[length(blocks) + 1L]] <<- Matrix::sparseMatrix(
+      i = nonzero[, 1], j = nonzero[, 2], x = values[nonzero], dims = dim(values),
+      dimnames = list(genes, input$barcodes))
+  }, chunk_rows)
+  do.call(rbind, blocks)
+}
+
+inspect_gse176031_r_artifact <- function(registry, path, accessions, original_barcodes = NULL,
+                                        data_root = registry$roots$data, chunk_rows = 500L) {
+  path <- normalizePath(path, mustWork = TRUE)
+  row <- which(registry$artifacts$path == path)
+  if (length(row) != 1L || registry$artifacts$format[row] != "rds") {
+    stop("Explicit inspection requires exactly one registered RDS artifact.")
+  }
+  # This operation is explicit: ordinary discovery never deserializes an R object.
+  object <- readRDS(path)
+  object <- attach_geo_sample_metadata(object, registry, accessions)
+  cells <- colnames(object)
+  accessions <- as.character(object$geo_accession)
+  if (is.null(original_barcodes)) original_barcodes <- cells
+  if (!is.character(original_barcodes) || anyNA(original_barcodes) ||
+      length(original_barcodes) != length(cells) || any(!nzchar(original_barcodes))) {
+    stop("Supply one original DGE barcode per object cell.")
+  }
+  if (!is.null(names(original_barcodes))) {
+    if (anyDuplicated(names(original_barcodes)) || !setequal(names(original_barcodes), cells)) {
+      stop("Original-barcode mappings must match the object's cells exactly.")
+    }
+    original_barcodes <- unname(original_barcodes[match(cells, names(original_barcodes))])
+  }
+  counts <- if (inherits(object, "SingleCellExperiment")) {
+    SummarizedExperiment::assay(object, "counts")
+  } else {
+    layers <- SeuratObject::Layers(object[["RNA"]], search = "^counts($|\\.)")
+    if (!identical(layers, "counts")) stop("Explicit inspection requires one RNA counts layer.")
+    SeuratObject::LayerData(object, assay = "RNA", layer = "counts")
+  }
+  genes <- rownames(counts)
+  if (!length(genes) || anyNA(genes) || any(!nzchar(genes)) || anyDuplicated(genes) ||
+      !all(cells %in% colnames(counts))) {
+    stop("Existing counts must have unique feature IDs and contain every mapped cell.")
+  }
+  for (id in unique(accessions)) {
+    selected <- which(accessions == id)
+    barcodes <- original_barcodes[selected]
+    input <- resolve_gse176031_input(registry, id, data_root)
+    if (anyDuplicated(barcodes) || !all(barcodes %in% input$barcodes)) {
+      stop("Existing cell barcodes do not match the declared DGE source.")
+    }
+    found <- logical(length(genes))
+    .gse_walk_counts(input, function(source_genes, values) {
+      positions <- match(source_genes, genes)
+      included <- which(!is.na(positions))
+      if (!length(included)) return(invisible(NULL))
+      observed <- as.matrix(counts[positions[included], cells[selected], drop = FALSE])
+      expected <- values[included, match(barcodes, input$barcodes), drop = FALSE]
+      if (anyNA(observed) || any(observed != expected)) {
+        stop("Existing counts do not match the original DGE values for the declared cells/features.")
+      }
+      found[positions[included]] <<- TRUE
+    }, chunk_rows)
+    if (!all(found)) stop("Existing features do not match the original DGE feature identifiers.")
+  }
+  registry$artifacts$inspection_status[row] <- "existing_R_object_source_verified"
+  registry$artifacts$counts_verified[row] <- TRUE
+  registry$artifacts$compatibility_verified[row] <- TRUE
+  registry$artifacts$detail[row] <- paste(
+    class(object)[1], "counts verified against DGE for the declared feature/cell subset;",
+    "GEO metadata attached without replacing counts. Filtering/biological quality is not established.")
+  list(object = object, registry = registry)
+}
+
 .gse_artifacts <- function(roots, explicit_paths, add_issue) {
   paths <- explicit_paths
   for (root in roots) {
@@ -178,7 +298,7 @@ attach_geo_sample_metadata <- function(object, registry, accessions) {
       if (grepl("filtered", name, ignore.case = TRUE)) "filtered_name_hint" else
         if (grepl("raw", name, ignore.case = TRUE)) "raw_name_hint" else "unspecified"
     row <- data.frame(path = path,
-                      accession = if (grepl("^GSM[0-9]+_", name)) sub("_.*", "", name) else NA_character_,
+                      accession = .gse_filename_accessions(name),
                       format = format, stage_hint = stage, inspection_status = "uninspected",
                       counts_verified = FALSE, compatibility_verified = FALSE,
                       detail = "Count values, dataset association, and analysis compatibility are not verified.",
@@ -233,7 +353,7 @@ build_gse176031_registry <- function(data_root, series_matrix, artifact_roots = 
       field[has_key] <- trimws(substr(value[has_key], 1L, split[has_key] - 1L))
       value[has_key] <- trimws(sub("^[^:]*:", "", value[has_key]))
     }
-    data.frame(accession = ids, field = field, value = value,
+    data.frame(accession = ids, field = field, value = value, source_value = row$values,
                source_field = row$key, source_row = row$row, stringsAsFactors = FALSE)
   }))
   characteristic <- function(field) vapply(ids, function(id) {
@@ -241,7 +361,7 @@ build_gse176031_registry <- function(data_root, series_matrix, artifact_roots = 
     if (length(values) == 1L && nzchar(values)) values else NA_character_
   }, character(1), USE.NAMES = FALSE)
   files <- sort(list.files(data_root, pattern = "_dge\\.txt(\\.gz)?$", ignore.case = TRUE))
-  file_ids <- as.character(ifelse(grepl("^GSM[0-9]+_", files), sub("_.*", "", files), NA_character_))
+  file_ids <- .gse_filename_accessions(files)
   barcodes <- setNames(lapply(seq_along(files), function(i) {
     tryCatch(.gse_header(file.path(data_root, files[i])), error = function(e) {
       add_issue("invalid_dge_header", file_ids[i], conditionMessage(e), "error")
@@ -251,13 +371,15 @@ build_gse176031_registry <- function(data_root, series_matrix, artifact_roots = 
   info <- file.info(file.path(data_root, files))
   inputs <- data.frame(file = files, accession = file_ids, size_bytes = info$size,
                        n_cells = lengths(barcodes), stringsAsFactors = FALSE)
+  for (id in unique(file_ids[!is.na(file_ids) & duplicated(file_ids)])) {
+    add_issue("duplicate_dge_accession", id,
+              paste(inputs$file[which(inputs$accession == id)], collapse = " | "), "error")
+  }
   matched <- match(ids, inputs$accession)
   for (i in seq_along(ids)) {
     candidates <- which(inputs$accession == ids[i])
     if (!length(candidates)) {
       add_issue("missing_dge", ids[i], "No local DGE input matches this GEO accession.", "error")
-    } else if (length(candidates) > 1L) {
-      add_issue("duplicate_dge_accession", ids[i], paste(inputs$file[candidates], collapse = " | "), "error")
     }
     if (length(candidates) != 1L || !inputs$n_cells[candidates[1]] ||
         ids[i] %in% duplicate_metadata) matched[i] <- NA_integer_

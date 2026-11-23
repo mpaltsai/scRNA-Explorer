@@ -101,6 +101,8 @@ testthat::test_that("existing R artifacts are preferred candidates without deser
   testthat::expect_false(any(registry$artifacts$counts_verified))
   testthat::expect_false(any(registry$artifacts$compatibility_verified))
   testthat::expect_equal(nrow(resolve_gse176031_input(registry, "GSM101")$artifacts), 1L)
+  testthat::expect_error(inspect_gse176031_r_artifact(registry,
+    file.path(artifact_root, "GSM101_existing.rds"), "GSM101"), "existing SingleCellExperiment or Seurat")
 })
 
 testthat::test_that("confirmed hg19 resolves the reference conflict without replacing source text", {
@@ -138,6 +140,7 @@ testthat::test_that("GEO sample metadata attaches to existing SCE and Seurat obj
   testthat::expect_identical(attached$sample, c("local-1", "local-2"))
   testthat::expect_identical(S4Vectors::metadata(attached)$existing_note, "retain")
   testthat::expect_equal(nrow(S4Vectors::metadata(attached)$geo$sample_metadata), nrow(registry$metadata))
+  testthat::expect_true("patient: P1" %in% S4Vectors::metadata(attached)$geo$sample_metadata$source_value)
   testthat::expect_identical(as.character(attached$geo_confirmed_genome_build), c("hg19", "hg19"))
   testthat::expect_identical(attach_geo_sample_metadata(attached, registry, mapping), attached)
 
@@ -200,4 +203,75 @@ testthat::test_that("an empty final barcode is reported rather than silently dro
   testthat::expect_true("invalid_dge_header" %in% registry$issues$code)
   testthat::expect_true(is.na(registry$samples$dge_file[registry$samples$accession == "GSM101"]))
   testthat::expect_error(resolve_gse176031_input(registry, "GSM101"), "unambiguous")
+})
+
+testthat::test_that("duplicate inputs are reported even when their accession is absent from GEO", {
+  f <- registry_fixture()
+  on.exit(unlink(f$root, recursive = TRUE))
+  f$write_dge("GSM999_first_dge.txt.gz")
+  f$write_dge("GSM999_second_dge.txt.gz")
+  registry <- build_gse176031_registry(f$data_root, f$metadata)
+  rows <- registry$issues[registry$issues$code == "duplicate_dge_accession", ]
+  testthat::expect_identical(rows$accession, "GSM999")
+  testthat::expect_identical(rows$severity, "error")
+  testthat::expect_equal(sum(registry$issues$code == "unmatched_dge"), 2L)
+})
+
+testthat::test_that("the explicit shared DGE reader preserves gene and cell identity as sparse counts", {
+  f <- registry_fixture()
+  on.exit(unlink(f$root, recursive = TRUE))
+  con <- gzfile(file.path(f$data_root, "GSM101_tissue_dge.txt.gz"), "wt")
+  writeLines(c("GENE\tshared\tcell-b", "A1BG\t1\t0", "B2M\t0\t2"), con)
+  close(con)
+  registry <- build_gse176031_registry(f$data_root, f$metadata)
+  counts <- read_gse176031_counts(registry, "GSM101", chunk_rows = 1L)
+  testthat::expect_s4_class(counts, "sparseMatrix")
+  testthat::expect_identical(rownames(counts), c("A1BG", "B2M"))
+  testthat::expect_identical(colnames(counts), c("shared", "cell-b"))
+  testthat::expect_equal(as.matrix(counts), matrix(c(1, 0, 0, 2), nrow = 2,
+                         dimnames = list(c("A1BG", "B2M"), c("shared", "cell-b"))))
+  testthat::expect_error(read_gse176031_counts(registry, "GSM101", chunk_rows = 0), "positive integer")
+})
+
+testthat::test_that("explicit R-object inspection verifies source counts and reuses SCE/Seurat objects", {
+  testthat::skip_if_not_installed("SingleCellExperiment")
+  testthat::skip_if_not_installed("SeuratObject")
+  f <- registry_fixture()
+  on.exit(unlink(f$root, recursive = TRUE))
+  counts <- Matrix::sparseMatrix(i = c(1, 1), j = c(1, 2), x = c(1, 1), dims = c(1, 2),
+                                 dimnames = list("A1BG", c("shared", "cell-b")))
+  objects <- list(SCE = SingleCellExperiment::SingleCellExperiment(assays = list(counts = counts)),
+                  Seurat = SeuratObject::CreateSeuratObject(counts = counts))
+  paths <- file.path(f$root, paste0("GSM101_", names(objects), ".rds"))
+  for (i in seq_along(paths)) saveRDS(objects[[i]], paths[i])
+  registry <- build_gse176031_registry(f$data_root, f$metadata, r_artifacts = paths)
+  original <- tools::md5sum(paths)
+  for (i in seq_along(paths)) {
+    inspected <- inspect_gse176031_r_artifact(registry, paths[i], "GSM101", chunk_rows = 1L)
+    row <- inspected$registry$artifacts[inspected$registry$artifacts$path == normalizePath(paths[i]), ]
+    testthat::expect_true(row$counts_verified)
+    testthat::expect_true(row$compatibility_verified)
+    testthat::expect_identical(class(inspected$object), class(objects[[i]]))
+    testthat::expect_identical(as.character(inspected$object$geo_accession), c("GSM101", "GSM101"))
+  }
+  testthat::expect_identical(tools::md5sum(paths), original)
+  SummarizedExperiment::assay(objects$SCE, "counts")[1, 1] <- 2
+  bad <- file.path(f$root, "GSM101_wrong.rds")
+  saveRDS(objects$SCE, bad)
+  bad_registry <- build_gse176031_registry(f$data_root, f$metadata, r_artifacts = bad)
+  testthat::expect_error(inspect_gse176031_r_artifact(bad_registry, bad, "GSM101"), "do not match")
+})
+
+testthat::test_that("explicit count import rejects non-count values and ambiguous feature rows", {
+  f <- registry_fixture()
+  on.exit(unlink(f$root, recursive = TRUE))
+  cases <- list(c("A1BG\t0.5\t0", "B2M\t0\t2"), c("A1BG\t1\t0", "A1BG\t0\t2"))
+  errors <- c("integer counts", "feature identifiers")
+  for (i in seq_along(cases)) {
+    con <- gzfile(file.path(f$data_root, "GSM101_tissue_dge.txt.gz"), "wt")
+    writeLines(c("GENE\tshared\tcell-b", cases[[i]]), con)
+    close(con)
+    registry <- build_gse176031_registry(f$data_root, f$metadata)
+    testthat::expect_error(read_gse176031_counts(registry, "GSM101", chunk_rows = 1L), errors[i])
+  }
 })

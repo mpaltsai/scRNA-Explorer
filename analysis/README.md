@@ -22,10 +22,10 @@ Outputs are local and ignored by git:
 
 - `registry.rds`: reusable metadata/header records for subsequent tickets.
 - `samples.csv`: accession-based join, original patient/tissue/specimen fields, declared and confirmed genome builds, and available DGE inputs.
-- `source_metadata.csv`: every original sample field/value, including repeated fields, with source row and source field.
+- `source_metadata.csv`: every original sample field/value, including repeated fields, with source row, source field, and verbatim `source_value` alongside parsed characteristics.
 - `inputs.csv`: file inventory and header-derived cell counts. These are not validated expression-count values.
 - `issues.csv`: missing/unmatched/duplicate inputs, invalid headers, source conflicts, and unresolved relationships.
-- `artifacts.csv`: optional explicitly configured R artifact references; empty when none are supplied. R serialization headers alone do not establish class, dataset association, or count compatibility.
+- `artifacts.csv`: optional explicitly configured R artifact references; empty when none are supplied. Ordinary discovery inspects serialization headers only; explicit inspection below can verify class, source counts, and metadata compatibility.
 
 Nonempty output directories are never overwritten. Reuse a saved registry with `readRDS()`; choose a new output directory for a new snapshot. A failed input check produces diagnostics and a nonzero command status rather than silently selecting an ambiguous input.
 
@@ -58,6 +58,29 @@ All source sample fields are projected into namespaced cell metadata; standardiz
 Counts, other assays, cell order, existing sample/QC fields, and other object metadata stay unchanged. Filtering/subsetting retains the attached fields through normal object behavior. When converting representations, explicitly retain or reattach the GEO record using the current cell mapping; the existing Shiny normalization code has not yet been changed to do this automatically. The helper does not normalize, filter, cluster, or create a new expression-data container.
 
 Optionally pass `--r-artifact /path/to/existing.rds` to register an existing R file without deserializing it. No AnnData files are inspected or converted, and no Python runtime is required.
+
+### Explicit count import or existing-object verification
+
+When no compatible R object is available, read a registered DGE input once:
+
+```r
+counts <- read_gse176031_counts(registry, "GSM5353214")
+# Pass counts into the existing SingleCellExperiment workflow and retain that object.
+```
+
+The shared R reader validates unique feature identifiers and nonnegative integer counts, parsing bounded row chunks into a sparse Matrix. It runs only when called explicitly; ordinary registration still reads headers/metadata only. Reuse the resulting existing SCE/Seurat object in later tickets instead of calling the reader to reconstruct it.
+
+For an existing registered RDS candidate, explicitly deserialize and qualify it:
+
+```r
+checked <- inspect_gse176031_r_artifact(registry, "/path/to/existing.rds", "GSM5353214")
+sce <- checked$object       # the existing SCE or Seurat object with GEO metadata attached
+registry <- checked$registry
+```
+
+This opt-in operation checks the object class and original counts against the DGE values for its declared cell/feature subset. It streams source chunks rather than constructing another full comparison matrix. A Seurat object needs one RNA counts layer. Renamed cells require an explicit `original_barcodes` mapping, named by current cell IDs or in current cell order. Several samples additionally require explicit per-cell accessions. Mismatched counts, features, barcodes, or conflicting GEO metadata cause an error; the source RDS is never overwritten. Successful qualification updates that artifact's verification flags in the returned registry, not the on-disk file. It establishes source/count compatibility, not filtering history or biological quality. This operation may load a large RDS and therefore is not part of automatic discovery.
+
+The provenance flag `expression_values_read = FALSE` describes ordinary registry construction, not subsequent explicit count import or artifact verification. Those operations are opt-in and inspect counts as documented above.
 
 ## Checks
 
