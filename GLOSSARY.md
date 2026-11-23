@@ -47,3 +47,9 @@ Gene counts summed across cells belonging to a specified biological sample and c
 
 **Analysis bundle**:
 A downloadable record of an analysis containing its data object, experimental metadata, settings, software versions, filtering decisions, and annotation history. Parent and subcluster relationships remain part of that record.
+
+**Step proposal**:
+A candidate analysis result with its input reference, method settings, diagnostic evidence, and provenance, awaiting a user's decision. Producing a proposal does not approve it for downstream analysis.
+
+**Analysis decision**:
+An explicit acceptance or rejection of a step proposal, accompanied by a reason. Acceptance records the user's choice and supporting evidence, not a claim of statistical optimality.

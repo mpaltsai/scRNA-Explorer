@@ -2,6 +2,8 @@
 
 Develop and validate R features against local datasets before integrating them into Shiny. Existing app scripts remain unchanged by this input/metadata work. Whether the app is extended or rebuilt is a later decision.
 
+For stepwise inspection, explicit acceptance/rejection, and a saved decision history, use the [standalone R decision runner](decision-runner.md). It reuses SCE/Seurat objects without automatic full-object checkpoints.
+
 ## Register GSE176031
 
 The source is the existing compressed gene-by-cell DGE collection plus its GEO series matrix. This workflow does not use AnnData. The registry contains paths, barcode headers, sample metadata, provenance, and diagnostics; it is not a replacement for SingleCellExperiment or Seurat and contains no expression array.
@@ -88,6 +90,6 @@ The provenance flag `expression_values_read = FALSE` describes ordinary registry
 Rscript --vanilla tests/run_registry_tests.R
 ```
 
-The registry command uses base R. Tests use an existing `testthat` installation; object-attachment tests additionally use installed Matrix, SingleCellExperiment, and SeuratObject packages. Nothing installs dependencies automatically.
+The registry command uses base R. Tests use an existing `testthat` installation; object-attachment tests additionally use installed Matrix, SingleCellExperiment, and SeuratObject packages. Runner checks also use the existing `digest` package. This command runs both registry and decision-runner checks. Nothing installs dependencies automatically.
 
 The checks cover accession joins, missing/duplicate/unmatched inputs, reference provenance, changed headers/relocation, source-field collisions, SCE/Seurat attachment with unchanged counts, and command output reuse. Real-data checks can resolve every registered accession without loading expression arrays. This establishes an input/metadata foundation, not biological validation of a new QC or annotation method.
