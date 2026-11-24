@@ -62,283 +62,53 @@ function(input, output, session){
     validate(need(identical(tools::file_ext(input$zipFile$name),"zip"),"Invalid extension (not a .zip file)"))
   }) %>% bindEvent(input$zipFile, ignoreInit = TRUE, ignoreNULL=TRUE)
   
-  #Check if there ism't any file uploaded or state which kind of input the user has provided
-    user_input <- reactive({
-      #if(length(input$testData)==0){
-       # validate("You haven't chosen your data type yet")
-      validate(need(input$testData, message = FALSE))
-      if(input$testData == 1){
-        count.matrix <- TRUE
-        seurat <- TRUE
-        inputFile <- "raw_se_S190.rds"
-        inputDir <- FALSE
-        my_samples_list <- c(my_list = readData(count.matrix, seurat, inputFile, inputDir), ############## <<- #############################
-                    mes = "Reading data completed. The origin organism is Mus musculus. Please select the appropriate button below.")
-        
-      }else{
-        validate(need(input$typeData, message = FALSE))
-        if(input$typeData == 1){
-          #req(input$csvFile$datapath)
-          validate(need(input$csvFile$datapath, message = "Please upload a file"))
-          count.matrix <- TRUE
-          seurat <- FALSE
-          inputFile <- input$csvFile$datapath
-          inputDir <- FALSE
-          my_samples_list <- c(my_list = readData(count.matrix, seurat, inputFile, inputDir),
-                               mes = "Reading data completed ")
-          
-        }else if(input$typeData==3){
-          req(input$rdsFile$datapath)
-          count.matrix <- TRUE
-          seurat <- TRUE
-          inputFile <- input$rdsFile$datapath
-          inputDir <- FALSE
-          my_samples_list <- c(my_list = readData(count.matrix, seurat, inputFile, inputDir),
-                               mes = "Reading data completed ")
-          
-        }else if(input$typeData==2){
-          req(input$mtxInput$datapath)
-          req(input$genes10XInput$datapath)
-          my_samples_list <- c(my_list = my_read10X(mtxPath = input$mtxInput$datapath, 
-                                                    genesPath = input$genes10XInput$datapath, 
-                                                    barcodesPath = input$barcodes10XInput$datapath),
-                               mes = "Reading data completed ")
-          
-          ###i put it inside my_read10X at the end 
-          #counts <- as(input_counts, "dgCMatrix")
-          
-        }else if(input$typeData==4){
-          req(input$zipFile$datapath)
-          if(isTRUE(file.exists("./userFile"))){
-            unlink("./userFile", recursive = TRUE)
-          }
-          u <- unzip(input$zipFile$datapath, exdir = "userFile")
-          user_list_dir <- list.dirs("./userFile")
-          my_samples_list <- c(my_list = list(readZip(user_list_dir)),
-                               mes = "Reading data completed ")
-        }
-      } 
-    })%>% bindEvent(input$startQC , ignoreInit = TRUE, ignoreNULL = TRUE)
+  # Input readers retain structured records (including original SCE metadata).
+  # Only fully reviewed records can supply the existing annotation workflow.
+  importer <- input_import_server(input, output, session, function(directory, selected_input) {
+    read_app_input(selected_input, directory)
+  })
+  user_input <- reactive({
+    records <- importer$ready()
+    req(records)
+    list(my_list = import_counts(records), mes = importer$status())
+  })
 
-   # output$readData <- renderText({
-  #   need(input$typeData, message=FALSE)
-      #req(input$typeData)
-   #   my_datatest <<- user_input()$my_list
-      #dd <- req(input$typeData)
-      #if(dd==4){
-    #    cond_satisf = c()
-     #   for(x in user_input()$my_list){
-      #    my_condition = is.null(base::rownames(x))
-       #   cond_satisf <- c(cond_satisf, my_condition)
-        #}
-    #    if(any(cond_satisf)==TRUE){
-     #     paste0("Genes names are absent for counts data in subdirectory ", which(cond_satisf==TRUE), ". Please upload a file with gene names as row names if a count matrix or check your data in any other case")
-    #    }else{
-    #      user_input()$mes
-     #   }
+  # Starting/reviewing an import invalidates dependent data, even on failure.
+  # State follows the import result rather than a second independent Read event.
+  observeEvent(importer$records(), {
+    fields <- c("d_to_metadata", "d_to_filter", "filt_samples_list",
+      "loaded.dataSO.combined.no.cluster", "loaded.dataSO.combined.markers",
+      "loaded.dataSO.combined.markerstop", "gen_cluster_res",
+      "loaded.dataSO.combined", "iRNA_cor_tables", "iRNA_enrich_tables")
+    for (field in fields) my_react_vals[[field]] <- NULL
+    my_react_vals$import_records <- importer$records()
+    records <- importer$ready()
+    if (!is.null(records)) my_react_vals$d_to_metadata <- import_counts(records)
+  }, ignoreNULL = FALSE)
 
-    # })
-    
-    #observeEvent(input$typeData,{
-      #hide("readData")
-    #  output$readData <- renderText({NULL})
-    #  output$paramsAddMetadata <- renderText({NULL})
-   #   output$initDataFilt <- renderText({NULL})
-   # })
-    
-    #empty outputs and reactive values when changing input data
-    observeEvent(input$startQC,{
-      my_react_vals$d_to_filter <- NULL
-      my_react_vals$d_to_metadata <- NULL
-    #hide("readData")
-      if(input$startQC>0){
-        output$readData <- renderText({NULL})
-        output$paramsAddMetadata <- renderText({NULL})
-        output$initDataFilt <- renderText({NULL})
-        #shinyjs::reset("reset_inputs")
-        
-        my_react_vals$filt_samples_list <- NULL
-        my_react_vals$loaded.dataSO.combined.no.cluster <- NULL
-        my_react_vals$loaded.dataSO.combined.markers <- NULL
-        my_react_vals$loaded.dataSO.combined.markerstop <- NULL
-        my_react_vals$gen_cluster_res <- NULL
-        my_react_vals$loaded.dataSO.combined <- NULL
-        my_react_vals$iRNA_cor_tables <- NULL
-        my_react_vals$iRNA_enrich_tables <- NULL
-        #metrics_clean() <- NULL
-        #se_c() <- NULL
-        #output$UMIsPlot <- renderPlot({NULL})
-        
+  ##### Gene annotation, QC metrics and per-sample baseline SCEs #####
+  annotator <- annotation_qc_server(input, output, session, importer$ready)
+  calc_metadata <- reactive({
+    p <- annotator$prepared(); req(p)
+    list(my_list = p, mes = annotator$status())
+  })
+  calc_se <- reactive({
+    b <- annotator$baseline(); req(b)
+    list(my_list = lapply(b, function(object) list(se = object)),
+      mes = annotator$baseline_status())
+  })
 
-      }
-      
-    })
-    
-    #to prevent withSpinner running when starting the app
-    output$readData <- renderText({NULL})
-    output$paramsAddMetadata <- renderText({NULL})
-    output$initDataFilt <- renderText({NULL})
-    
-    
-    #output readData and check if rownames (genes) are present
-    observeEvent(input$startQC,{
-        #validate(need(input$typeData, message=FALSE))
-      validate(need(user_input(), message = FALSE))
-      validate(need(input$testData, message=FALSE))
-      
-      my_react_vals$d_to_metadata <- user_input()$my_list
-      
-      if(input$testData==2){
-          
-          output$readData <- renderText({
-            validate(need(input$typeData, message=FALSE))
-            
-            #my_datatest <<- user_input()$my_list ############## <<- #############################
-            
-            cond_satisf = c()
-            for(x in user_input()$my_list){
-              my_condition = is.null(base::rownames(x))
-              cond_satisf <- c(cond_satisf, my_condition)
-            }
-            if(any(cond_satisf)==TRUE){
-              paste0("Genes names are absent for counts data in subdirectory ", which(cond_satisf==TRUE), ". Please upload a file with gene names as row names if a count matrix or check your data in any other case")
-            }else{
-              user_input()$mes
-            }
-            
-          })
-      }else if(input$testData == 1){
-        output$readData <- renderText({
-          user_input()$mes
-        })
-        }
-      #show("readData")
-      }, ignoreNULL = FALSE)
-    #})
-  ##### Preprocessing #####
-    
-    #add metadata and update counts, sometimes we have to subset the count.matrix because we don't have matches between gene names and ensembl IDs
-    calc_metadata <- reactive({
-      #validate(need(try(user_input()), message = FALSE))
-      validate(need(try(my_react_vals$d_to_metadata), message = "Please read data first"))
-      if(input$testData == 1){#test dataset
-        if(length(input$typeOrganism) == 0){
-          #output$paramsAddMetadata <- renderText(
-          my_metadata_list <- list(mes = "You have to select the origin organism")
-          #)
-        }else{
-          #d_to_metadata <- user_input()$my_list
-          my_metadata_list <- c(my_list = list(createMetadata(list_samples= my_react_vals$d_to_metadata,"Mus musculus", FALSE)), ############## <<- #############################
-                                 mes = "Metadata added")
-          
-        }
+  # A changed reference/baseline invalidates active downstream inputs. The
+  # baseline SCE remains separate from later user-filtered SCEs.
+  observeEvent(annotator$baseline(), {
+    b <- annotator$baseline()
+    fields <- c("loaded.dataSO.combined.no.cluster",
+      "loaded.dataSO.combined.markers", "loaded.dataSO.combined.markerstop",
+      "gen_cluster_res", "loaded.dataSO.combined", "iRNA_cor_tables", "iRNA_enrich_tables")
+    for (field in fields) my_react_vals[[field]] <- NULL
+    my_react_vals$multiple_case <- !is.null(b) && length(b) > 1L
+  }, ignoreNULL = FALSE)
 
-      }else if(input$typeData == 1 | input$typeData == 3){#count.matrix or rds
-        if(length(input$typeOrganism) == 0){
-          #output$paramsAddMetadata <- renderText(
-          my_metadata_list <- list(mes = "You have to select the origin organism")
-          #)
-        }else{
-          #d_to_metadata <- user_input()$my_list
-          my_metadata_list <- c(my_list = list(createMetadata(list_samples = my_react_vals$d_to_metadata,input$typeOrganism, FALSE)),
-                        mes = "Metadata added")
-          
-        }
-      }else if(input$typeData == 2){#10X
-        if(length(input$typeOrganism) == 0){
-          
-          my_metadata_list <- list(mes = "You have to select the origin organism")
-        }else{
-          #d_to_metadata <- user_input()$my_list
-          my_metadata_list <- c(my_list = list(createMetadata(list_samples = my_react_vals$d_to_metadata,input$typeOrganism, FALSE)),
-            mes = "Metadata added")
-          
-        }
-         
-        }else if(input$typeData == 4){#multiple samples
-          
-          if(length(input$typeOrganism) == 0){
-            
-            my_metadata_list <- list(mes = "You have to select the origin organism")
-          }else{
-            #d_to_metadata <- user_input()$my_list
-            my_metadata_list <- c(my_list = list(createMetadata(list_samples = my_react_vals$d_to_metadata,input$typeOrganism, TRUE)),
-              mes = "Metadata added")
-          }
-        }
-        
-    })%>% bindEvent(input$addMetadata , ignoreInit = TRUE, ignoreNULL = TRUE)
-    
-    observeEvent(input$addMetadata, {
-      
-      my_react_vals$d_to_filter <- calc_metadata()$my_list
-      
-      output$paramsAddMetadata <- renderText({
-        
-          calc_metadata()$mes
-
-      })
-    }, ignoreNULL = FALSE)
-    
-    #minimal filtering
-    calc_se <- reactive({
-
-      validate(need(try(my_react_vals$d_to_filter), message = "Please add metadata first")) ########################
-      #validate(need(calc_metadata()$my_list, message = FALSE))
-      #metaData <<- calc_metadata()$my_list
-      if(input$testData == 1){#test dataset
-        #d_to_filter <- calc_metadata()$my_list ########################
-        my_filter_list <- c(my_list = list(initial_filt(list_samples = my_react_vals$d_to_filter, FALSE)), ############## <<- #############################
-                            mes = "Minimal filtering completed")
-        
-        
-      }else if(input$testData == 2){
-        if(input$typeData == 1 | input$typeData == 3){#count.matrix or rds
-          if(length(input$typeOrganism) == 0){
-            #output$paramsAddMetadata <- renderText(
-            my_filter_list <- list(mes = "You have to select the origin organism") ############## <<- #############################
-            #)
-          }else{
-            #d_to_filter <- calc_metadata()$my_list
-            my_filter_list <- c(my_list = list(initial_filt(list_samples = my_react_vals$d_to_filter, FALSE)),
-                                mes = "Minimal filtering completed")
-            
-          }
-        }else if(input$typeData == 2){#10X
-          if(length(input$typeOrganism) == 0){
-            
-            my_filter_list <- list(mes = "You have to select the origin organism")
-          }else{
-            #d_to_filter <- calc_metadata()$my_list
-            my_filter_list <- c(my_list = list(initial_filt(list_samples = my_react_vals$d_to_filter, FALSE)),
-                                mes = "Minimal filtering completed")
-            
-          }
-          
-        }else if(input$typeData == 4){#multiple samples
-          
-          if(length(input$typeOrganism) == 0){
-            
-            my_filter_list <- list(mes = "You have to select the origin organism")
-          }else{
-            #d_to_filter <- calc_metadata()$my_list
-            my_filter_list <- c(my_list = list(initial_filt(list_samples = my_react_vals$d_to_filter, TRUE)),
-                                mes = "Minimal filtering completed")
-          }
-        }
-      }
-
-      })%>% bindEvent(input$initFiltering, ignoreInit = TRUE, ignoreNULL = TRUE)
-    
-    observeEvent(input$initFiltering, {
-      #my_sample_one <<- calc_se()$my_list[["sample"]]$se ############## <<- #############################
-      output$initDataFilt<- renderText({
-        
-        calc_se()$mes
-      
-      }) 
-    }, ignoreNULL = FALSE)
-    
     #save and download as rds
     output$initDownload <- 
       
@@ -347,623 +117,70 @@ function(input, output, session){
           paste0("init_filt_data_",  Sys.Date(), ".rds")
         },
         content = function(filename) {
-          if(my_react_vals$multiple_case){
+          if(length(calc_se()$my_list)>1L){
             saveRDS(calc_se()$my_list, filename)
           }else{
-            saveRDS(calc_se()$my_list[["sample"]]$se, filename)
+            saveRDS(calc_se()$my_list[[1]]$se, filename)
           }
           #saveRDS(calc_se()$my_list, file)
         }
       )
   
     
-  ###### QC routine #####
-  
-  #update selectInput for samples 
-  observeEvent(input$initFiltering,{
-    
-    my_choices <-  names(calc_se()$my_list)
-    updateSelectInput(session, "selectSample",
-                      label = "Choose a sample",
-                      choices =  my_choices,
-                      selected = NULL)
-  }, ignoreInit = TRUE, ignoreNULL = FALSE)#%>% bindEvent(input$showSamples , ignoreInit = TRUE, ignoreNULL = TRUE)
-    
-    #make selectSample input reactive
-    my_sample_name <- reactive({
-      req(input$selectSample)
-      my_name <- input$selectSample
-    })
-  
-
-    #create metrics
-    calc_metrics <- reactive({
-      validate(need(calc_se()$my_list, message="Please complete the initial filtering before proceeding")) 
-      validate(need(input$selectSample, message=FALSE))
-     #my_se<<- calc_se()$my_list ############################ ATTENTION #########################
-      
-      my_metrics <- c(as.data.frame(colData(calc_se()$my_list[[my_sample_name()]]$se)), sample = my_sample_name(),
-        mes = paste0("Metrics created for ", my_sample_name()))
-      
-    })%>% bindEvent(input$makeMetrics , ignoreInit = TRUE, ignoreNULL = TRUE)
-    
-    output$createdMetrics <- renderText({
-      validate(need(calc_se()$my_list, message="Please complete the initial filtering before proceeding")) 
-        calc_metrics()$mes
-      }) 
-
-    output$dimsMetrics <- renderText({
-      validate(need(calc_metrics(), message= FALSE))
-      paste0("Dimensions of ", my_sample_name(), ":",
-             "\nFeatures: ", dim(calc_se()$my_list[[my_sample_name()]]$se)[1],
-             "\nCells: ", dim(calc_se()$my_list[[my_sample_name()]]$se)[2])
-    })
-    
-  #Update slider min & max values when metrics object is created
-    observeEvent(input$drawPlots,{
-      validate(need(input$makeMetrics, message=FALSE))
-      validate(need(calc_metrics(), message= FALSE))
-      validate(need(input$selectSample, message="You have to pick a sample to work with"))
-      #update slider min and max values of UMIs per cell
-      updateSliderInput(session,"nUMIs", "Number of UMIs:",
-                        min = 0, max = max(calc_metrics()$nUMI), value = c(min(calc_metrics()$nUMI),max(calc_metrics()$nUMI)), step = 10)
-      #nGenes histogram
-      updateSliderInput(session, "nGenes", "Number of genes:",
-                        min = 0, max = max(calc_metrics()$nGene), value = c(min(calc_metrics()$nGene),max(calc_metrics()$nGene)), step = 10)
-      #UMIs vs nGenes with mitoRatio
-      updateSliderInput(session,"nUMIsVSnGenes", "Genes detected:",
-                        min = 0, max = max(calc_metrics()$nGene), value = c(min(calc_metrics()$nGene),max(calc_metrics()$nGene)), step = 10)
-      #UMIs vs nGenes with hemoRatio
-      updateSliderInput(session,"nUMIsVSnGenesRBC", "Genes detected:",
-                        min = 0, max = max(calc_metrics()$nGene), value = c(min(calc_metrics()$nGene),max(calc_metrics()$nGene)), step = 10)
-      #mitoRatio
-      updateSliderInput(session,"mitoRatio", "Mitochondrial ratio:",
-                        min = 0, max = round(max(calc_metrics()$mitoRatio), digits = 5), value = c(round(min(calc_metrics()$mitoRatio),digits = 5),round(max(calc_metrics()$mitoRatio), digits = 5)), step = 0.0001)
-      #hemoRatio
-      updateSliderInput(session,"rbcRatio", "Hemoglobins ratio:",
-                        min = 0, max = round(max(calc_metrics()$rbcRatio), digits = 5), value = c(round(min(calc_metrics()$rbcRatio),digits = 5),round(max(calc_metrics()$rbcRatio), digits = 5)), step = 0.0001)
-      #Genes vs UMIs (novelty)
-      updateSliderInput(session,"novelty", "Genes detected per UMI:",
-                        min = 0, max = round(max(calc_metrics()$log10GenesPerUMI), digits = 2), value = round(min(calc_metrics()$log10GenesPerUMI),digits = 2), step = 0.01)
-      
-    })
-    
-    #create observers to toggle plots and text output when input data change
-    
-    showPlot <- reactiveVal(TRUE)
-    showFilteredPlot <- reactiveVal(TRUE)
-    showcreatedMetrics <- reactiveVal(TRUE)
-    showQCDataFilt <- reactiveVal(TRUE)
-    showmetricsFilt <- reactiveVal(TRUE)
-    showlibraryPlot <- reactiveVal(TRUE)
-    showlibraryPlotFiltered <- reactiveVal(TRUE)
-    showhighExprPlot <- reactiveVal(TRUE)
-    showhighExprPlotFiltered <- reactiveVal(TRUE)
-    
-    observeEvent(input$startQC, {
-      if(input$startQC>1){
-        showPlot(FALSE) 
-        showFilteredPlot(FALSE)
-        showcreatedMetrics(FALSE)
-        showQCDataFilt(FALSE)
-        showmetricsFilt(FALSE)
-        showlibraryPlot(FALSE)
-        showlibraryPlotFiltered(FALSE)
-        showhighExprPlot(FALSE)
-        showhighExprPlotFiltered(FALSE)
-      }
-    })
-    observeEvent(input$drawPlots, {
-      showPlot(TRUE) 
-    })
-    observeEvent(input$redrawPlots, {
-      showFilteredPlot(TRUE) 
-    })
-    observeEvent(input$makeLibrary, {
-      showlibraryPlot(TRUE) 
-    })
-    observe({
-      toggle(id = "libraryPlot", condition = showlibraryPlot())
-    })
-    observeEvent(input$makeLibraryFiltered, {
-      showlibraryPlotFiltered(TRUE) 
-    })
-    observe({
-      toggle(id = "libraryPlotFiltered", condition = showlibraryPlotFiltered())
-    })
-    observeEvent(input$makeHighExpr, {
-      showhighExprPlot(TRUE) 
-    })
-    observe({
-      toggle(id = "highExprPlot", condition = showhighExprPlot())
-    })
-    observeEvent(input$makeHighExprFiltered, {
-      showhighExprPlotFiltered(TRUE) 
-    })
-    observe({
-      toggle(id = "highExprPlotFiltered", condition = showhighExprPlotFiltered())
-    })
-    #show and hide plots depending on button pressed from previous observers
-    observe({
-      toggle_filt_plots <- function(x){
-        toggle(x, condition = showFilteredPlot())
-      }
-      mapply(toggle_filt_plots, c("UMIsPlotFiltered", "GenesHistPlotFiltered", "GenesBoxPlotFiltered", "UMIsGenesPlotFiltered", "UMIsGenesPlotRBCFiltered", 
-                             "mitoRatioPlotFiltered", "rbcRatioPlotFiltered", 
-                             "noveltyPlotFiltered", "libraryPlotFiltered", "highExprPlotFiltered"))
-      #toggle(id = "UMIsPlot", condition = showPlot())
-    })
-    
-    observe({
-      toggle_plots <- function(x){
-        toggle(x, condition = showPlot())
-      }
-      mapply(toggle_plots, c("UMIsPlot", "GenesHistPlot", "GenesBoxPlot", "UMIsGenesPlot", "UMIsGenesPlotRBC", "mitoRatioPlot", "rbcRatioPlot", 
-                             "noveltyPlot", "libraryPlot", "highExprPlot"))
-      #toggle(id = "UMIsPlot", condition = showPlot())
-    })
-
-    observeEvent(c(input$makeMetrics),{
-      showcreatedMetrics(TRUE)
-    })
-    observeEvent(c(input$QCFiltering),{
-      showQCDataFilt(TRUE)
-    })
-    observeEvent(c(input$filt_metrics),{
-      showmetricsFilt(TRUE)
-    })
-    observe({
-      toggle(id = "createdMetrics", condition = showcreatedMetrics())
-    })
-    observe({
-      toggle(id = "QCDataFilt", condition = showQCDataFilt())
-    })
-    observe({
-      toggle(id = "metricsFilt", condition = showmetricsFilt())
-    })
-    
-  output$UMIsPlot <- renderPlot({
-      validate(need(calc_metrics(), message= "You have to compute metrics for your sample first"))
-      #req(hidePlot())
-      createUMIsPlot(calc_metrics(), input$nUMIs[1], input$nUMIs[2])
-      
-    })%>% bindEvent(c(input$drawPlots, input$nUMIs) , ignoreInit = TRUE, ignoreNULL = TRUE) 
-  
-  #})%>% bindEvent(c(input$makeNBUMIs, input$nUMIs) , ignoreInit = TRUE, ignoreNULL = TRUE)
-  
-
-  output$GenesHistPlot<- renderPlot({
-    validate(need(calc_metrics(), message= "You have to compute metrics for your sample first"))
-    createGenesHistPlot(calc_metrics(), input$nGenes[1], input$nGenes[2])
-  })%>% bindEvent(c(input$drawPlots, input$nGenes) , ignoreInit = TRUE, ignoreNULL = TRUE)
-  #})%>% bindEvent(c(input$makeNBgenesHist, input$nGenes) , ignoreInit = TRUE, ignoreNULL = TRUE)
-
-  #nGenes boxplot
-  output$GenesBoxPlot <- renderPlot({
-    validate(need(calc_metrics(), message= "You have to compute metrics for your sample first"))
-    createGenesBoxPlot(calc_metrics())
-  })%>% bindEvent(c(input$drawPlots) , ignoreInit = TRUE, ignoreNULL = TRUE)  
-  #})%>% bindEvent(c(input$makeNBgenesBoxPlot) , ignoreInit = TRUE, ignoreNULL = TRUE)
-  
-
-  output$UMIsGenesPlot <- renderPlot({
-    validate(need(calc_metrics(), message= "You have to compute metrics for your sample first"))
-    createUMIsGenesPlot(calc_metrics(), input$nUMIsVSnGenes[1], input$nUMIsVSnGenes[2])
-  })%>% bindEvent(c(input$drawPlots, input$nUMIsVSnGenes) , ignoreInit = TRUE, ignoreNULL = TRUE)  
-  #})%>% bindEvent(c(input$makeUMIsGenes, input$nUMIsVSnGenes) , ignoreInit = TRUE, ignoreNULL = TRUE)
- 
-  
-  output$UMIsGenesPlotRBC <- renderPlot({
-    validate(need(calc_metrics(), message= "You have to compute metrics for your sample first"))
-    createUMIsGenesPlotRBC(calc_metrics(), input$nUMIsVSnGenesRBC[1], input$nUMIsVSnGenesRBC[2])
-  })%>% bindEvent(c(input$drawPlots, input$nUMIsVSnGenesRBC) , ignoreInit = TRUE, ignoreNULL = TRUE)    
-  #})%>% bindEvent(c(input$makeUMIsGenesRBC, input$nUMIsVSnGenesRBC) , ignoreInit = TRUE, ignoreNULL = TRUE)
-  
-
-  
-  output$mitoRatioPlot <- renderPlot({
-    validate(need(calc_metrics(), message= "You have to compute metrics for your sample first"))
-    createmitoRatioPlot(calc_metrics(), input$mitoRatio[1], input$mitoRatio[2])
-  })%>% bindEvent(c(input$drawPlots, input$mitoRatio) , ignoreInit = TRUE, ignoreNULL = TRUE)  
-  #})%>% bindEvent(c(input$makemitoRatio, input$mitoRatio) , ignoreInit = TRUE, ignoreNULL = TRUE)
-  
-  #plot hemoRatio
-
-  output$rbcRatioPlot <- renderPlot({
-    validate(need(calc_metrics(), message= "You have to compute metrics for your sample first"))
-    createrbcRatioPlot(calc_metrics(), input$rbcRatio[1], input$rbcRatio[2])
-  })%>% bindEvent(c(input$drawPlots, input$rbcRatio) , ignoreInit = TRUE, ignoreNULL = TRUE)  
-  #})%>% bindEvent(c(input$makerbcRatio, input$rbcRatio) , ignoreInit = TRUE, ignoreNULL = TRUE)
-  
-  #Genes vs UMIs
-
-  output$noveltyPlot <- renderPlot({
-    validate(need(calc_metrics(), message= "You have to compute metrics for your sample first"))
-    createnoveltyPlot(calc_metrics(), input$novelty[1], input$novelty[2])
-  })%>% bindEvent(input$drawPlots, input$novelty, ignoreInit = TRUE, ignoreNULL = TRUE)  
-  #})%>% bindEvent(input$makeNovelty, input$novelty, ignoreInit = TRUE, ignoreNULL = TRUE)
-  
-  #plot scaterPlot
-  scater_plot <- reactive({
-    validate(need(calc_se()$my_list, message= FALSE))
-    createlibraryPlot(calc_se()$my_list[[my_sample_name()]]$se)
-  #})%>%bindEvent(input$drawPlots, ignoreInit = TRUE, ignoreNULL = TRUE)  
-  })%>%bindEvent(input$makeLibrary, ignoreInit = TRUE, ignoreNULL = TRUE)
-  
-  
-  output$libraryPlot <- renderPlot({
-    req(showlibraryPlot())
-    validate(need(calc_se()$my_list, message= "You have to complete initial filtering first"))
-    scater_plot()
+  ##### Per-sample QC review: immutable baseline -> Preview -> Apply #####
+  qc_review <- qc_review_server(input, output, session, annotator$baseline)
+  my_sample_name <- qc_review$selected
+  # Compatibility readers now follow the selected sample, rather than caching
+  # metrics behind separate button events. These contain tables only.
+  calc_metrics <- reactive({
+    m <- qc_review$metrics(); req(m)
+    c(as.list(m[.qc_metric_names]),list(mes=paste("Metrics ready for",my_sample_name())))
   })
-  
-  #plot highest expressed features
-  highest_expr_plot <- reactive({
-    validate(need(calc_se()$my_list, message= FALSE))
-    createhighExprPlot(calc_se()$my_list[[my_sample_name()]]$se)
-  #})%>%bindEvent(input$drawPlots, ignoreInit = TRUE, ignoreNULL = TRUE)  
-  })%>%bindEvent(input$makeHighExpr, ignoreInit = TRUE, ignoreNULL = TRUE)
-  
-  output$highExprPlot <- renderPlot({
-    req(showlibraryPlotFiltered())
-    validate(need(calc_se()$my_list, message= "You have to complete initial filtering first"))
-    highest_expr_plot()
-  })
-  
-  #zoom on plot
-  observeEvent(input$zoomhighExprPlot, {
-    validate(need(calc_se()$my_list, message= FALSE))
-    showModal(modalDialog(
-      renderPlot({
-        highest_expr_plot()
-        },
-        width = 600,
-        height = 1200,
-        res = 300),
-      footer = NULL,
-      size = "l",
-      easyClose = TRUE
-    ))
-  })
-  
-  ###### Filtering thresholds #####
-  
-  #update filtering thresholds when metrics are computed to avoid wrong initial values as input to plots
-  observe({
-    validate(need(calc_se(), message=FALSE))
-    validate(need(calc_metrics(), message=FALSE))
-    
-    updateNumericInput(session, "minUMIsPerCell", value = min(calc_metrics()$nUMI))
-    updateNumericInput(session, "maxUMIsPerCell", value = max(calc_metrics()$nUMI))
-    updateNumericInput(session, "minGenesPerCell", value = min(calc_metrics()$nGene))
-    updateNumericInput(session, "maxGenesPerCell", value = max(calc_metrics()$nGene))
-    updateNumericInput(session, "minMitoPerCell", value = round(min(calc_metrics()$mitoRatio),digits = 5))
-    updateNumericInput(session, "maxMitoPerCell", value = round(max(calc_metrics()$mitoRatio),digits = 5))
-    updateNumericInput(session, "minRbcPerCell", value = round(min(calc_metrics()$rbcRatio),digits = 5))
-    updateNumericInput(session, "maxRbcPerCell", value = round(max(calc_metrics()$rbcRatio),digits = 5))
-    updateNumericInput(session, "noveltyPerCell", value = round(min(calc_metrics()$log10GenesPerUMI),digits = 5))
-    
-  }) %>% bindEvent(input$makeMetrics, ignoreInit = TRUE, ignoreNULL = TRUE)
-  
-  
-  #update filtering thresholds from sliders upon user request via action button "updateThresholds"
-  observe({
-    updateNumericInput(session, "minUMIsPerCell", value = input$nUMIs[1])
-    updateNumericInput(session, "maxUMIsPerCell", value = input$nUMIs[2])
-    updateNumericInput(session, "minGenesPerCell", value = input$nGenes[1])
-    updateNumericInput(session, "maxGenesPerCell", value = input$nGenes[2])
-    updateNumericInput(session, "minMitoPerCell", value = input$mitoRatio[1])
-    updateNumericInput(session, "maxMitoPerCell", value = input$mitoRatio[2])
-    updateNumericInput(session, "minRbcPerCell", value = input$rbcRatio[1])
-    updateNumericInput(session, "maxRbcPerCell", value = input$rbcRatio[2])
-    updateNumericInput(session, "noveltyPerCell", value = input$novelty)
-    
-  }) %>% bindEvent(input$updateThresholds, ignoreInit = TRUE, ignoreNULL = TRUE)
-  
-  #User defined thresholds from numericInput boxes
-  output$minUMIsPerCellThreshold <- renderText({ paste0("We'll keep cells with number of UMIs detected per cell above: ", input$minUMIsPerCell) })
-  output$maxUMIsPerCellThreshold <- renderText({ paste0("We'll keep cells with number of UMIs detected per cell below: ", input$maxUMIsPerCell) })
-  output$minGenesPerCellThreshold <- renderText({ paste0("We'll keep cells with number of genes detected per cell above: ", input$minGenesPerCell) })
-  output$maxGenesPerCellThreshold <- renderText({ paste0("We'll keep cells with number of genes detected per cell below: ", input$maxGenesPerCell) })
-  output$minMitoPerCellThreshold <- renderText({ paste0("We'll keep cells with mitochondrial ratio above: ", input$minMitoPerCell) })
-  output$maxMitoPerCellThreshold <- renderText({ paste0("We'll keep cells with mitochondrial ratio below: ", input$maxMitoPerCell) })
-  output$minRbcPerCellThreshold <- renderText({ paste0("We'll keep cells with hemoglobins ratio above: ", input$minRbcPerCell) })
-  output$maxRbcPerCellThreshold <- renderText({ paste0("We'll keep cells with hemoglobins ratio below: ", input$maxRbcPerCell) })
-  output$noveltyPerCellThreshold <- renderText({ paste0("We'll keep cells with number of genes detected per UMI per cell (novelty) above: ", input$noveltyPerCell) })
-  
-  #QC Filtering
   se_c <- reactive({
-    if(is.null(calc_metrics())){
-      validate(FALSE, message=paste0("Doesn't seem you've created the metrics for this sample yet (input= ", my_sample_name(), ")"))
-    }
-    validate(need(calc_metrics(), message=FALSE))
-    metrics <- as.data.frame(calc_metrics())
-    raw_data <- calc_se()$my_list[[my_sample_name()]]$se
-    #filter_cells(raw_data, metrics, input$minUMIsPerCell, input$maxUMIsPerCell, input$minGenesPerCell, input$maxGenesPerCell, 
-     # input$noveltyPerCell, input$minMitoPerCell, input$maxMitoPerCell, input$minRbcPerCell, input$maxRbcPerCell)
-    tryCatch( 
-      {
-        filter_cells(raw_data, metrics, input$minUMIsPerCell, input$maxUMIsPerCell, input$minGenesPerCell, input$maxGenesPerCell, 
-                     input$noveltyPerCell, input$minMitoPerCell, input$maxMitoPerCell, input$minRbcPerCell, input$maxRbcPerCell)
-      },
-      error = function(e) {
-        validate(FALSE,paste0("Doesn't seem you've created the metrics for this sample yet (input= ", my_sample_name(), ")"))
-      }
-    )
-
-  })%>% bindEvent(input$QCFiltering , ignoreInit = TRUE, ignoreNULL = TRUE)
-  
-  output$QCDataFilt <- reactive({
-      se_c()$mes
+    n <- my_sample_name(); req(n)
+    object <- qc_review$filtered()[[n]]; req(object)
+    list(se=object,mes="Applied QC-filtered data")
   })
-  
-  #create a list to keep filtered data for each sample
-  #create the names of the list
-  filt_samples_list_names <- reactive({
-    validate(need(calc_se()$my_list, message=FALSE))
-    names(calc_se()$my_list)
-  })
-  #reactive values to store the samples list
-  #my_react_vals <- reactiveValues()#(filt_samples_list = NULL, loaded.dataSO.combined.no.cluster = NULL, loaded.dataSO.combined.markers = NULL, loaded.dataSO.combined.markerstop = NULL)
-  
-  #initialize a samples' list for multiple samples
-  observeEvent(input$initFiltering,{
-    validate(need(input$typeData, message = FALSE))
-    if(input$typeData==4){
-      my_react_vals$filt_samples_list <- vector(mode="list", length=length(filt_samples_list_names()))
-      names(my_react_vals$filt_samples_list) <- filt_samples_list_names()
-    }#else{
-      #my_react_vals$filt_samples_list <- list(se_c()$se)
-      #names(my_react_vals$filt_samples_list)[1] <- "sample"
-    #}
-  })
-   # initialize a samples' list for testData and update it with filtered testData
-  observeEvent(input$QCFiltering,{
-    validate(need(input$testData, message = FALSE))
-    if(input$testData==1){
-    my_react_vals$filt_samples_list <- list(se_c()$se)
-    names(my_react_vals$filt_samples_list)[1] <- "sample"
-    }
-  })
-  
-  #update the filtered samples list
-  observeEvent(input$QCFiltering,{
-    validate(need(se_c(), message=FALSE))
-    validate(need(calc_se()$my_list, message=FALSE))
-    validate(need(input$typeData, message = FALSE))
-    if(input$typeData==4){
-      #my_react_vals$filt_samples_list <- vector(mode="list", length=length(filt_samples_list_names()))
-      my_react_vals$filt_samples_list[[my_sample_name()]] <- se_c()$se
-    }else{
-      my_react_vals$filt_samples_list <- list(se_c()$se)
-      names(my_react_vals$filt_samples_list)[1] <- "sample"
-    }
-  })
-
-  # Save subset to new metrics variable
   metrics_clean <- reactive({
-    validate(need(input$selectSample, message=FALSE))
-    validate(need(input$initFiltering, message="Please complete the initial filtering before proceeding")) 
-    validate(need(se_c()$se, message = FALSE))######################## ATTENTION ################################################
-    #test_se_c <<- se_c()$se ######################## ATTENTION ################################################
-    #my_filt_samples_list <<- my_react_vals$filt_samples_list
-    my_metrics_clean <- c(as.data.frame(colData(se_c()$se)), sample = my_sample_name(),
-    mes = paste0("Metrics recomputed for ", my_sample_name()))
-    
-  })%>% bindEvent(input$filt_metrics, ignoreInit = TRUE, ignoreNULL = TRUE)
+    object <- se_c()$se
+    c(as.list(baseline_qc_metrics(object)),list(mes=paste("Applied metrics for",my_sample_name())))
+  })
+  observeEvent(qc_review$revisions(), {
+    # Preview/draft edits leave revisions unchanged. An Apply replaces only
+    # its sample and invalidates every dependent combined result.
+    revisions <- qc_review$revisions()
+    if (!identical(revisions,isolate(my_react_vals$qc_applied_revisions))) {
+      my_react_vals$filt_samples_list <- qc_review$filtered()
+      my_react_vals$qc_applied_revisions <- revisions
+      for(field in c("loaded.dataSO.combined.no.cluster","loaded.dataSO.combined.markers",
+        "loaded.dataSO.combined.markerstop","gen_cluster_res","loaded.dataSO.combined",
+        "iRNA_cor_tables","iRNA_enrich_tables")) my_react_vals[[field]] <- NULL
+    }
+  }, ignoreNULL=FALSE, priority=90)
 
-   
-  output$metricsFilt<- renderText({
-
-    metrics_clean()$mes
- 
-  })
-  
-  output$dimsMetricsClean <- renderText({
-    validate(need(metrics_clean(), message= FALSE))
-    paste0("Dimensions of filtered ", my_sample_name(), ":",
-           "\nFeatures: ", dim(my_react_vals$filt_samples_list[[my_sample_name()]])[1],
-           "\nCells: ", dim(my_react_vals$filt_samples_list[[my_sample_name()]])[2])
-  })
-  #save and download as rds
-  output$QCDownload <- 
-    #validate(need(se_c()$se, message = "You have to filter out cells first"))
-    downloadHandler(
-      filename = function() {
-        paste0("filtered_se_", my_sample_name(), "_", Sys.Date(), ".rds")
-      },
-      content = function(file) {
-       # se= calc_se()$se
-       # keep_index = keep_index()$keep_index
-        saveRDS(se_c()$se, file)
-      }
-    )
-
-  
-  ##### Redraw Plots with filtered data #####
-  #UMIs Plot
-  output$UMIsPlotFiltered <- renderPlot({
-    validate(need(metrics_clean(), message = "You have to compute metrics for filtered cells first"))
-    
-    createUMIsPlot(metrics_clean(), min(metrics_clean()$nUMI),max(metrics_clean()$nUMI))
-    
-  })%>% bindEvent(input$redrawPlots , ignoreInit = TRUE, ignoreNULL = TRUE)
-  
-  #nGenes histogram
-  output$GenesHistPlotFiltered <- renderPlot({
-    validate(need(metrics_clean(), message = "You have to compute metrics for filtered cells first"))
-    
-    createGenesHistPlot(metrics_clean(), min(metrics_clean()$nGene),max(metrics_clean()$nGene))
-    
-  })%>% bindEvent(input$redrawPlots , ignoreInit = TRUE, ignoreNULL = TRUE)
-  
-  #nGenes Boxplot
-  output$GenesBoxPlotFiltered <- renderPlot({
-    validate(need(metrics_clean(), message = "You have to compute metrics for filtered cells first"))
-    
-    createGenesBoxPlot(metrics_clean())
-    
-  })%>% bindEvent(input$redrawPlots , ignoreInit = TRUE, ignoreNULL = TRUE)
-  
-  #UMIs vs genes with mitoRatio
-  output$UMIsGenesPlotFiltered <- renderPlot({
-    validate(need(metrics_clean(), message = "You have to compute metrics for filtered cells first"))
-    
-    createUMIsGenesPlot(metrics_clean(), min(metrics_clean()$nGene), max(metrics_clean()$nGene))
-    
-  })%>% bindEvent(input$redrawPlots , ignoreInit = TRUE, ignoreNULL = TRUE)
-  
-  #UMIs vs genes with rbcRatio
-  output$UMIsGenesPlotRBCFiltered <- renderPlot({
-    validate(need(metrics_clean(), message = "You have to compute metrics for filtered cells first"))
-    
-    createUMIsGenesPlotRBC(metrics_clean(), min(metrics_clean()$nGene), max(metrics_clean()$nGene))
-    
-  })%>% bindEvent(input$redrawPlots , ignoreInit = TRUE, ignoreNULL = TRUE)
-  
-  #mitoRatio
-  output$mitoRatioPlotFiltered <- renderPlot({
-    validate(need(metrics_clean(), message = "You have to compute metrics for filtered cells first"))
-    
-    createmitoRatioPlot(metrics_clean(), min(metrics_clean()$mitoRatio), max(metrics_clean()$mitoRatio))
-    
-  })%>% bindEvent(input$redrawPlots , ignoreInit = TRUE, ignoreNULL = TRUE)
-  
-  #rbcRatio
-  output$rbcRatioPlotFiltered <- renderPlot({
-    validate(need(metrics_clean(), message = "You have to compute metrics for filtered cells first"))
-    
-    createrbcRatioPlot(metrics_clean(), min(metrics_clean()$rbcRatio), max(metrics_clean()$rbcRatio))
-    
-  })%>% bindEvent(input$redrawPlots , ignoreInit = TRUE, ignoreNULL = TRUE)
-  
-   
-  #novelty
-  output$noveltyPlotFiltered <- renderPlot({
-    validate(need(metrics_clean(), message = "You have to compute metrics for filtered cells first"))
-    
-    createnoveltyPlot(metrics_clean(), min(metrics_clean()$log10GenesPerUMI), max(metrics_clean()$log10GenesPerUMI))
-    
-  })%>% bindEvent(input$redrawPlots , ignoreInit = TRUE, ignoreNULL = TRUE)
-  
-  #library plot
-  output$libraryPlotFiltered <- renderPlot({
-    req(showhighExprPlot())
-    validate(need(se_c()$se, message = "You have to filter out cells first"))
-    createlibraryPlot(se_c()$se)
-    
-  })%>% bindEvent(input$makeLibraryFiltered , ignoreInit = TRUE, ignoreNULL = TRUE)
-  
-  #plot highest expressed features
-  highest_expr_plot_filtered <- reactive({
-    validate(need(se_c()$se, message = FALSE))
-    createhighExprPlot(se_c()$se)
-  })%>%bindEvent(input$makeHighExprFiltered , ignoreInit = TRUE, ignoreNULL = TRUE)
-  
-  output$highExprPlotFiltered <- renderPlot({
-    req(showhighExprPlotFiltered())
-    validate(need(se_c()$se, message = "You have to filter out cells first"))
-    highest_expr_plot_filtered()
-  })
-  
-  #zoom on plot
-  observeEvent(input$zoomhighExprPlotFiltered, {
-    #validate(need(se_c()$se, message = "You have to filter out cells first"))
-    showModal(modalDialog(
-      renderPlot({
-        highest_expr_plot_filtered()
-      },
-      width = 600,
-      height = 1200,
-      res = 300),
-      footer = NULL,
-      size = "l",
-      easyClose = TRUE
-    ))
-  })
-  
   ##### Cell clustering #####
   
-  #I have to initialize a variable that corresponds to input$typeData == 4, else I have a problem when working with testData, because input$typeData is NULL in this case
-  observeEvent(input$startQC,{
-    validate(need(input$testData, message = FALSE))
-    if(input$testData == 1){
-      my_react_vals$multiple_case <- FALSE
-    }else if(input$testData == 2){
-      validate(need(input$typeData, message = FALSE))
-      if(input$typeData== 4){
-        my_react_vals$multiple_case <- TRUE
-      }else{
-        my_react_vals$multiple_case <- FALSE
-      }
-    }
-  }, ignoreNULL = TRUE)
-  
-  ##Normalize data and store the clustering Seurat object as a reactiveVal object so I can update it at the next steps, avoiding the creation of new objects
+  # All samples need an applied, nonempty QC revision before normalization.
   observeEvent(input$normData,{
-    validate(need(se_c(), message=FALSE))
-    validate(need(calc_se()$my_list, message=FALSE))
-    #validate(need(my_react_vals$filt_samples_list, message = FALSE))
-    #validate(need(any(mapply(is.null, my_react_vals$filt_samples_list )) == FALSE, message = "It seems you forgot to filter out cells in some/all of your samples"))
-    #filt_samples_list_pre_norm <<- my_react_vals$filt_samples_list ############## <<- #############################
-    #if(input$typeData==4){
-    if(my_react_vals$multiple_case){
-      validate(need(my_react_vals$filt_samples_list, message = FALSE))
-      validate(need(any(mapply(is.null, my_react_vals$filt_samples_list )) == FALSE, message = "It seems you forgot to filter out cells in some/all of your samples"))
-      
-      spsComps::shinyCatch({
-        
-        my_react_vals$loaded.dataSO.combined.no.cluster <- norm_data_and_pca_multiple(my_react_vals$filt_samples_list)
-        
-      },
-      # blocking recommended
-      blocking_level = "error",
-      prefix = "My-project" #change console prefix if you don't want "SPS"
-      )
-      
-    }else{
-      validate(need(my_react_vals$filt_samples_list, message = "Please filter out cells first before proceeding to normalization"))
-      validate(need(any(mapply(is.null, my_react_vals$filt_samples_list )) == FALSE, message = "It seems you forgot to filter out cells in your sample"))
-      
-      spsComps::shinyCatch({
-        my_react_vals$loaded.dataSO.combined.no.cluster <- norm_data_and_pca(my_react_vals$filt_samples_list)
-      },
-      # blocking recommended
-      blocking_level = "error",
-      prefix = "My-project" #change console prefix if you don't want "SPS"
-      )
-      
-    }
+    inputs <- tryCatch(qc_review$require_ready(),error=function(e) {
+      validate(need(FALSE,conditionMessage(e)))
+    })
+    revisions <- qc_review$revisions()
+    spsComps::shinyCatch({
+      object <- if(length(inputs)>1L) norm_data_and_pca_multiple(inputs) else norm_data_and_pca(inputs)
+      object@misc$scrna_explorer_qc <- list(filtered_sample_revisions=revisions)
+      my_react_vals$loaded.dataSO.combined.no.cluster <- object
+    }, blocking_level="error", prefix="scRNA-Explorer")
   })
-  
-  #Normalize data
- # norm_pca_data <- reactive({
-  #  if(input$typeData == 4){
-  #    validate(need(my_react_vals$filt_samples_list, message = FALSE))
-  #    validate(need(any(mapply(is.null, my_react_vals$filt_samples_list )) == FALSE, message = "It seems you forgot to filter out cells in some/all of your samples"))
 
-   #   norm_data_and_pca_multiple(my_react_vals$filt_samples_list)
-  #  }else{
-   #   validate(need(my_react_vals$filt_samples_list, message = "Please filter out cells first before proceeding to normalization"))
-   #   validate(need(any(mapply(is.null, my_react_vals$filt_samples_list )) == FALSE, message = "It seems you forgot to filter out cells in your sample"))
-  #    norm_data_and_pca(my_react_vals$filt_samples_list)
-  #  }
- #}) %>% bindEvent(input$normData , ignoreInit = TRUE, ignoreNULL = TRUE)
-  
   output$normalizeData <- renderText({
-    #my_filt_samples_list <<- my_react_vals$filt_samples_list
-    #loaded.dataSO.combined.no.cluster<<- my_react_vals$loaded.dataSO.combined.no.cluster
-    validate(need(my_react_vals$filt_samples_list, message = "Please filter out cells first before proceeding to normalization"))
-    validate(need(any(mapply(is.null, my_react_vals$filt_samples_list )) == FALSE, message = "It seems you forgot to filter out cells in some/all of your samples"))
-    if(!is.null(my_react_vals$loaded.dataSO.combined.no.cluster )){
-      "Normalization and PCA completed successfully"
-    }else if(is.null(my_react_vals$loaded.dataSO.combined.no.cluster )){
-      #null_samples <- which(is.null(my_react_vals$loaded.dataSO.combined.no.cluster ))
-      #validate(FALSE, paste0("You have to complete the filtering step first"))
-      validate(FALSE,"You have to complete the filtering step first")
-    }
-  })%>% bindEvent(input$normData , ignoreInit = TRUE, ignoreNULL = TRUE)
-  
+    ready <- tryCatch({qc_review$require_ready();TRUE},error=function(e) FALSE)
+    if(!ready) return("Apply nonempty QC filtering to every sample before normalization.")
+    object <- my_react_vals$loaded.dataSO.combined.no.cluster
+    if(is.null(object)) return("Current QC revisions have not been normalized. Run normalization/PCA.")
+    "Normalization and PCA completed for the recorded applied QC revisions."
+  })
+
   #elbow plot
   output$elbowPlot <- renderPlot({ 
     validate(need(my_react_vals$loaded.dataSO.combined.no.cluster, message = FALSE))
@@ -1061,7 +278,7 @@ function(input, output, session){
     req(input$resolutionValue)
     #if(input$typeData==4){
     if(my_react_vals$multiple_case){
-      validate(need(any(mapply(is.null, my_react_vals$filt_samples_list )) == FALSE, message = "It seems you forgot to filter out cells in some/all of your samples"))
+    validate(need(tryCatch({qc_review$require_ready();TRUE},error=function(e) FALSE), message="Apply nonempty QC filtering to every sample first."))
       #validate(need(my_react_vals$filt_samples_list, message = "Please filter out cells first before proceeding to cell type clustering"))
       
       if(length(grep("RNA_nn", names(my_react_vals$loaded.dataSO.combined.no.cluster)))==0 | length(grep("RNA_snn", names(my_react_vals$loaded.dataSO.combined.no.cluster)))==0){
@@ -1078,7 +295,7 @@ function(input, output, session){
       prefix = "My-project" #change console prefix if you don't want "SPS"
       )
       }else{
-      validate(need(any(mapply(is.null, my_react_vals$filt_samples_list )) == FALSE, message = "It seems you forgot to filter out cells in some/all of your samples"))
+    validate(need(tryCatch({qc_review$require_ready();TRUE},error=function(e) FALSE), message="Apply nonempty QC filtering to every sample first."))
       #validate(need(my_react_vals$filt_samples_list, message = "Please filter out cells first before proceeding to cell type clustering"))
       validate(need(my_react_vals$loaded.dataSO.combined.no.cluster@reductions$pca, message = "It seems you didn't normalize data first"))
       if(length(grep("RNA_nn", names(my_react_vals$loaded.dataSO.combined.no.cluster)))==0 | length(grep("RNA_snn", names(my_react_vals$loaded.dataSO.combined.no.cluster)))==0){
@@ -1425,7 +642,7 @@ function(input, output, session){
       if(input$corData=='filtered'){
         #validate(need(try(se_c()), message="You have to complete filtering steps first before running a correlation analysis"))
         validate(need(try(my_react_vals$filt_samples_list), message = "You have to complete filtering steps first before running a correlation analysis"))
-        validate(need(any(mapply(is.null, my_react_vals$filt_samples_list )) == FALSE, message = "It seems you forgot to filter out cells in some/all of your samples"))
+    validate(need(tryCatch({qc_review$require_ready();TRUE},error=function(e) FALSE), message="Apply nonempty QC filtering to every sample first."))
         #update samples choices  
         updateSelectInput(inputId="targetGenesSampleFiltered",
                     label = "Choose a sample",
@@ -1459,7 +676,7 @@ function(input, output, session){
       }else if(input$corData=='clustered'){
         validate(need(try(my_react_vals$gen_cluster_res[1][[1]]), "You have to complete the annotation of clusters at the cell type clustering stage before running a correlation analysis"))
         validate(need(try(my_react_vals$filt_samples_list), message = "You have to complete filtering steps first before running a correlation analysis"))
-        validate(need(any(mapply(is.null, my_react_vals$filt_samples_list )) == FALSE, message = "It seems you forgot to filter out cells in some/all of your samples"))
+    validate(need(tryCatch({qc_review$require_ready();TRUE},error=function(e) FALSE), message="Apply nonempty QC filtering to every sample first."))
         validate(need(unique(my_react_vals$loaded.dataSO.combined.no.cluster$orig.ident), message = FALSE))
         #update samples choices  
         updateSelectInput(inputId="targetGenesSampleClustered",

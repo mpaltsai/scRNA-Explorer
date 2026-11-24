@@ -27,6 +27,12 @@ A computational score or label indicating that a barcode may represent more than
 **QC threshold recommendation**:
 A data-informed proposal for quality-control cutoffs that the user can inspect and edit before applying filtering. A recommendation does not itself exclude cells or establish their true quality.
 
+**QC baseline**:
+Called-cell data remaining after the initial requirement of at least 100 UMIs per cell. It provides the reference for a sample's subsequent QC filtering and is distinct from a raw droplet matrix.
+
+**QC-filtered data**:
+The cells retained from a sample's QC baseline by the user's applied QC filtering rules. Each sample is filtered separately before the retained data enter downstream analysis.
+
 **Cluster annotation**:
 A biological interpretation assigned to a cluster using marker evidence or reference data, with uncertainty retained when the evidence is insufficient.
 

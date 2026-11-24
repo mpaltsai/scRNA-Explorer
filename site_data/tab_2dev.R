@@ -1,357 +1,60 @@
-tab2 <-tabPanel("Quality Control Plots",
-  
-  #pull metrics from the rds object
-  fluidRow(
-    column(4,
-           wellPanel(
-             #QC plots
-             #create metrics
-             helpText(strong("First of all we have to create the metrics for visualizations")),
-             selectInput("selectSample", "Choose a sample", "", selected = NULL),
-             actionButton("makeMetrics", 'Create metrics'),
-             #span(textOutput("createdMetrics") %>% withSpinner(), style = "color:dodgerblue"),
-             span(textOutput("createdMetrics"), style = "color:dodgerblue"),
-             helpText("Now we can inspect these metrics to assess the quality of cells sequenced"),
-             actionButton("drawPlots", "Show plots")
-             
-           )       
-    ),
-    
-    column(4,
-           wellPanel(
-           helpText(strong("Pre-filtering Plots")),
-           textOutput("dimsMetrics")
-           #textOutput("NBinSample")
-    )),
-    column(4,
-           wellPanel(
-             helpText(strong("Post-filtering Plots")),
-             textOutput("dimsMetricsClean")
-           )
-  )),
-
-  #UMIs per cell
-  fluidRow(
-    column(4,
-           wellPanel(
-             #make number of UMIs/transcripts plot
-             helpText("Visualize UMI counts (transcripts) per cell"),
-             #actionButton("makeNBUMIs", 'Plot UMIs/transcripts per cell'),
-             conditionalPanel(
-               condition="input.drawPlots>0",
-               helpText("You can slide the vertical lines on the plot by changing the values below"),
-               #uiOutput("myControl")
-               sliderInput("nUMIs", "Number of UMIs:",
-                          min = 10, max = 1000, value = c(10,1000), step = 10)
-           )
-      
-    )),
-    column(4,
-           wellPanel(
-           #number of UMIs/transcripts per cell
-           plotOutput("UMIsPlot")#%>% withSpinner()
-           )
-      
-    ),
-    column(4,
-           wellPanel(
-             plotOutput("UMIsPlotFiltered")#%>% withSpinner()
-           )
-      
-    )
-  
-  
-  ),
-  
-  #genes per cell histogram
-  fluidRow(
-    column(4,
-           wellPanel(
-             #make number of genes HistPlot
-             helpText("Visualize the distribution of genes detected per cell via histogram"),
-             #actionButton("makeNBgenesHist", 'Plot genes detected per cell in a histogram'),
-             conditionalPanel(
-               condition = "input.drawPlots>0",
-               helpText("You can slide the vertical lines on the plot by changing the values below"),
-               sliderInput("nGenes", "Number of genes:",
-                           min = 10, max = 1000, value = c(10,1000), step = 10)
-             )
-             
-           )),
-    column(4,
-           wellPanel(
-             #number of genes per cell histogram
-             plotOutput("GenesHistPlot")#%>% withSpinner()
-           )
-        ),
-    column(4,
-           wellPanel(
-           plotOutput("GenesHistPlotFiltered")#%>% withSpinner()
-           )
-           )
-      ),
-  
-  #genes per cell boxplot
-  fluidRow(
-    column(4,
-           wellPanel(
-             #make number of genes BoxPlot
-             helpText("Visualize the distribution of genes detected per cell via boxplot"),
-             #actionButton("makeNBgenesBoxPlot", 'Plot genes detected per cell in a boxplot')
-             )
-             
-           ),
-    column(4,
-           wellPanel(
-             #number of genes per cell boxplot
-             plotOutput("GenesBoxPlot")#%>% withSpinner()
-           )
-    ),
-    column(4,
-           wellPanel(
-             plotOutput("GenesBoxPlotFiltered")#%>% withSpinner()
-           ))
-  ),
-
-#UMIs vs Genes with mitoRatio
-  fluidRow(
-    column(4,
-           wellPanel(
-             helpText("Visualize the correlation between genes detected and number of UMIs colored with mitochondrial ratio for each cell"),
-             #actionButton("makeUMIsGenes", 'Plot UMIs vs. genes detected'),
-             conditionalPanel(
-               condition="input.drawPlots>0",
-               helpText("You can slide the horizontal lines on the plot by changing the values below"),
-               sliderInput("nUMIsVSnGenes", "Number of genes:",
-                           min = 10, max = 1000, value = c(10,1000), step = 10)
-           )
-           
-    )),
-  column(4,
-         wellPanel(
-           #number of UMIs vs Genes per cell 
-           plotOutput("UMIsGenesPlot")#%>% withSpinner()
-         )
-  ),
-  column(4,
-         wellPanel(
-           plotOutput("UMIsGenesPlotFiltered")#%>% withSpinner()
-         ))
-  ),
-
-  #UMIs vs Genes with rbcRatio
-  fluidRow(
-    column(4,
-           wellPanel(
-             helpText("Visualize the correlation between genes detected and number of UMIs colored with hemoglobin ratio for each cell"),
-             #actionButton("makeUMIsGenesRBC", 'Plot UMIs vs. genes detected'),
-             conditionalPanel(
-               condition="input.drawPlots>0",
-               helpText("You can slide the horizontal lines on the plot by changing the values below"),
-               sliderInput("nUMIsVSnGenesRBC", "Number of genes:",
-                           min = 10, max = 1000, value = c(10,1000), step = 10)
-             )
-             
-           )),
-    column(4,
-           wellPanel(
-             #number of UMIs vs Genes per cell with rbcRatio
-             plotOutput("UMIsGenesPlotRBC")#%>% withSpinner()
-           )
-    ),
-    column(4,
-           wellPanel(
-             plotOutput("UMIsGenesPlotRBCFiltered")#%>% withSpinner()
-           ))
-  ),
-  
-  #Mitochondrial counts ratio
-  fluidRow(
-    column(4,
-           wellPanel(
-             helpText("Visualize the distribution of mitochondrial gene expression detected per cell"),
-             #actionButton("makemitoRatio", 'Plot mitochondrial ratio per cell'),
-             conditionalPanel(
-               condition="input.drawPlots>0",
-               helpText("You can slide the vertical lines on the plot by changing the values below"),
-               sliderInput("mitoRatio", "Mitochondrial ratio:",
-                           min = 0, max = 1, value = c(0,1), step = 0.0001)
-             )
-             
-           )),
-    column(4,
-           wellPanel(
-             #number of UMIs vs Genes per cell with rbcRatio
-             plotOutput("mitoRatioPlot")#%>% withSpinner()
-           )
-    ),
-    column(4,
-           wellPanel(
-             plotOutput("mitoRatioPlotFiltered")#%>% withSpinner()
-           ))
-  ),
-
-  #Hemoglobin counts ratio
-  fluidRow(
-    column(4,
-           wellPanel(
-             helpText("Visualize the distribution of hemoglobins expression detected per cell"),
-             #actionButton("makerbcRatio", 'Plot hemoglobins ratio per cell'),
-             conditionalPanel(
-               condition="input.drawPlots>0",
-               helpText("You can slide the vertical lines on the plot by changing the values below"),
-               sliderInput("rbcRatio", "Hemoglobins ratio:",
-                           min = 0, max = 1, value = c(0,1), step = 0.0001)
-             )
-             
-           )),
-    column(4,
-           wellPanel(
-             #number of UMIs vs Genes per cell with rbcRatio
-             plotOutput("rbcRatioPlot")#%>% withSpinner()
-           )
-    ),
-    column(4,
-           wellPanel(
-             plotOutput("rbcRatioPlotFiltered")#%>% withSpinner()
-           ))
-  ),
-
-  #Novelty
-  fluidRow(
-    column(4,
-           wellPanel(
-             helpText("Visualize the overall novelty of gene expression by visualizing the genes detected per UMI"),
-             #actionButton("makeNovelty", 'Plot genes detected per UMI'),
-             conditionalPanel(
-               condition="input.drawPlots>0",
-               helpText("You can slide the vertical lines on the plot by changing the value below"),
-               sliderInput("novelty", "Genes detected per UMI:",
-                           min = 0, max = 1, value = 0, step = 0.01)
-             )
-             
-           )),
-    column(4,
-           wellPanel(
-             #number of UMIs vs Genes per cell with rbcRatio
-             plotOutput("noveltyPlot")#%>% withSpinner()
-           )
-    ),
-    column(4,
-          wellPanel(
-            plotOutput("noveltyPlotFiltered")#%>% withSpinner()
-          ))
-  ),
-  #Plot an overview of expression for each cell
-  fluidRow(
-    column(4,
-           wellPanel(
-           helpText("Plot the relative proportion of the library size that is accounted for by the 300 most highly expressed features for each cell"),
-           actionButton("makeLibrary", "Plot overview of expression per cell (unfiltered)"),
-           actionButton("makeLibraryFiltered", "Plot overview of expression per cell (filtered)"),
-           helpText("This might take some time")
-            )
-           ),
-    column(4,
-           wellPanel(
-             plotOutput("libraryPlot")#%>% withSpinner()
-             )
-           
-           ),
-    column(4,
-           wellPanel(
-             plotOutput("libraryPlotFiltered")#%>% withSpinner()
-           ))
-  ),
-
-  #Plot highest expressed genes
-  fluidRow(
-    column(4,
-           wellPanel(
-             helpText("Plot highest expressed genes"),
-             actionButton("makeHighExpr", "Plot highest expressed genes (unfiltered)"),
-             actionButton("makeHighExprFiltered", "Plot highest expressed genes (filtered)"),
-             helpText("This might take some time")
-             
-           )),
-    column(4,
-           wellPanel(
-             actionButton("zoomhighExprPlot", "Zoom in"),
-             plotOutput("highExprPlot")#%>% withSpinner()
-             
-           )),
-    column(4,
-           wellPanel(
-             actionButton("zoomhighExprPlotFiltered", "Zoom in"),
-             plotOutput("highExprPlotFiltered")#%>% withSpinner()
-           ))
-  ),
-
-  #Filtering thresholds
-
-  fluidRow(
-    column(4,
-           wellPanel(
-             helpText(strong("Now we'll set thresholds to filter out low quality cells")),
-             helpText("In case you want to use thresholds defined by the sliders of each plot above please press the button below and values will be updated"),
-             helpText("Note: Min and max values for UMIs and genes are taken from the first and second plot respectively. 
-                      Mitochondrial ratio min and max values from the mitochondrial gene expression plot, whereas hemoglobins ratio from the hemoglobins gene expression plot.
-                      log10GenesPerUMI minimum value is taken from the genes detected per UMI plot."),
-             actionButton("updateThresholds", "Set thresholds from sliders"),
-             helpText("Else, provide the desired thresholds from the boxes below:"),
-             numericInput("minUMIsPerCell", "Min number of UMIs detected per cell:", 1000, min = 0, max = as.integer(.Machine$integer.max)),
-             numericInput("maxUMIsPerCell", "Max number of UMIs detected per cell:", 1000, min = 0, max = as.integer(.Machine$integer.max)),
-             numericInput("minGenesPerCell", "Min number of genes detected per cell:", 1000, min = 0, max = as.integer(.Machine$integer.max)),
-             numericInput("maxGenesPerCell", "Max number of genes detected per cell:", 1000, min = 0, max = as.integer(.Machine$integer.max)),
-             numericInput("minMitoPerCell", "Min mitochondrial ratio detected per cell:", 1000, min = 0, max = as.integer(.Machine$integer.max), step = 0.0001),
-             numericInput("maxMitoPerCell", "Max mitochondrial ratio detected per cell:", 1000, min = 0, max = as.integer(.Machine$integer.max), step = 0.0001),
-             numericInput("minRbcPerCell", "Min hemoglobin ratio detected per cell:", 1000, min = 0, max = as.integer(.Machine$integer.max), step = 0.0001),
-             numericInput("maxRbcPerCell", "Max hemoglobin ratio detected per cell:", 1000, min = 0, max = as.integer(.Machine$integer.max), step = 0.0001),
-             numericInput("noveltyPerCell", "Min log10GenesPerUMI per cell:", 1000, min = 0, max = as.integer(.Machine$integer.max), step = 0.01)
-             
-           )),
-    column(4,
-           wellPanel(
-             helpText(strong("Filtering thresholds")),
-             verbatimTextOutput("minUMIsPerCellThreshold"),
-             verbatimTextOutput("maxUMIsPerCellThreshold"),
-             verbatimTextOutput("minGenesPerCellThreshold"),
-             verbatimTextOutput("maxGenesPerCellThreshold"),
-             verbatimTextOutput("minMitoPerCellThreshold"),
-             verbatimTextOutput("maxMitoPerCellThreshold"),
-             verbatimTextOutput("minRbcPerCellThreshold"),
-             verbatimTextOutput("maxRbcPerCellThreshold"),
-             verbatimTextOutput("noveltyPerCellThreshold")
-                ),
-             
-           wellPanel(
-             helpText(strong("Now we can filter out low quality reads using selected thresholds")),
-             actionButton("QCFiltering", "Filter cells"),
-             #span(textOutput("QCDataFilt") %>% withSpinner(), style = "color:dodgerblue"),
-             span(textOutput("QCDataFilt"), style = "color:dodgerblue"),
-             
-             #save data as rds object
-             helpText(strong("You can save filtered data with metadata in a Rds object")),
-             #textInput(inputId="dataNameQC", "Please provide a name for your dataset", 
-                    #   value = "Enter a name..."),
-             helpText(strong("You can download the Rds object")),
-             downloadButton("QCDownload", 'Save Rds object')
-
-             
-           ),
-           wellPanel(
-             helpText(strong("Now we have filtered out cells we can redraw plots to assess our thresholds")),
-             helpText(strong("But first we have to re-compute our metrics")),
-             actionButton("filt_metrics", "Metrics of filtered data"),
-             #span(textOutput("metricsFilt") %>% withSpinner(), style = "color:dodgerblue"),
-             span(textOutput("metricsFilt"), style = "color:dodgerblue"),
-             actionButton("redrawPlots", "Plots with filtered cells")
-           ))
-           
-  ),
+# Decisions are per sample; every view labels preview versus applied filtering.
+tab2 <- tabPanel("Quality Control Plots",
   fluidRow(column(12,
-                  wellPanel("scRNA-Explorer is licensed under the GNU General Public License v3.0")))
-
-
-
-)#end of tabPanel
+    helpText("The fixed before-filtering baseline contains cells with UMIs >= 100. Each sample is reviewed and filtered separately."),
+    tableOutput("qcSampleSummary"))),
+  sidebarLayout(
+    sidebarPanel(width=3,
+      selectInput("selectSample","Choose a sample",choices=character()),
+      h4("Draft filtering thresholds"),
+      helpText("Bounds are inclusive. Editing thresholds changes the draft; applied data remain unchanged until Apply succeeds. Ribosomal annotation does not exclude genes or cells."),
+      uiOutput("qcReviewControls"),
+      actionButton("qcPreview","Preview filtering"),
+      textInput("qcApplyReason","Reason for applying these thresholds"),
+      actionButton("QCFiltering","Apply preview to this sample"),
+      textOutput("QCDataFilt"),
+      downloadButton("QCDownload","Download applied SCE"),
+      downloadButton("qcDecisionsDownload","Download decision histories")),
+    mainPanel(width=9,
+      radioButtons("qcView","Compare baseline with",choices=c("Current preview"="preview","Last applied filtering"="applied"),selected="preview",inline=TRUE),
+      textOutput("qcComparisonStatus"),
+      tabsetPanel(id="qcReviewTab",
+        tabPanel("Overview",value="overview",
+          h4("All baseline samples"),plotOutput("qcCohortOverview",height="450px"),
+          h4("Selected sample"),plotOutput("qcSelectedOverview",height="450px")),
+        tabPanel("Joint metrics",value="joint",
+          selectInput("qcJointX","Compare mitochondrial fraction with",choices=c("Detected genes"="nGene","UMIs"="nUMI")),
+          helpText("Hover over a point to inspect its stable cell ID and filtering reasons. Exclusions are shown on the baseline; retained cells are shown alongside with the same scales."),
+          plotOutput("qcJointPlot",height="450px",hover=hoverOpts("qcJointHover",delay=150)),
+          tableOutput("qcHoveredCells")),
+        tabPanel("Ribosomal fractions",value="ribosomal",
+          helpText("Fractions use all original UMIs as the denominator. They describe positively annotated members. Unresolved UMI shares can make those fractions incomplete. Protein parent/subgroups overlap and must not be added. No ribosomal thresholds are applied."),
+          plotOutput("qcRibosomalPlot",height="500px"),tableOutput("qcRibosomalCoverage")),
+        tabPanel("Annotation coverage",value="annotation",
+          helpText("Matched, ambiguous, partial and unmapped gene annotations are weighted by the counts they contribute to each cell. Features remain in the count matrix."),
+          plotOutput("qcAnnotationCoverage",height="400px")),
+        tabPanel("Filtering impact",value="impact",
+          helpText("Inspect the total retained/excluded count above, failures per rule, and exact combinations of failed rules. Individual rule counts overlap."),
+          plotOutput("qcRuleImpact",height="450px"),tableOutput("qcRuleCounts"),
+          plotOutput("qcRuleOverlap",height="450px")),
+        tabPanel("Sensitivity",value="sensitivity",
+          helpText("Preview or apply first. Each curve varies one threshold while keeping the others fixed at the selected preview/applied values. It does not establish true cell quality or an optimal setting. Fractions on these cutoff axes use 0–1."),
+          plotOutput("qcSensitivity",height="650px"),downloadButton("qcSensitivityDownload","Download sensitivity table")),
+        tabPanel("Cells and decisions",value="cells",
+          DT::DTOutput("qcCells"),downloadButton("qcCellsDownload","Download cell metrics and reasons"),
+          h4("Applied decisions for this sample"),tableOutput("qcHistory")),
+        tabPanel("Existing QC plots",value="existing",
+          helpText("The existing plot functions are retained. Baseline/retained facets share axes and thresholds. The genes distribution is a density plot; complexity is log10(genes)/log10(UMIs)."),
+          h4("UMIs"),plotOutput("UMIsPlot"),h4("Detected genes"),plotOutput("GenesHistPlot"),plotOutput("GenesBoxPlot"),
+          h4("UMIs versus genes: mitochondrial fraction"),plotOutput("UMIsGenesPlot"),
+          h4("UMIs versus genes: hemoglobin fraction"),plotOutput("UMIsGenesPlotRBC"),
+          h4("Mitochondrial fraction"),plotOutput("mitoRatioPlot"),h4("Hemoglobin fraction"),plotOutput("rbcRatioPlot"),
+          h4("Complexity"),plotOutput("noveltyPlot"),
+          h4("Expression composition"),
+          helpText("These expression plots run only on request. Retained expression plots always use the applied SCE."),
+          actionButton("makeLibrary","Baseline library composition"),plotOutput("libraryPlot"),
+          actionButton("makeLibraryFiltered","Applied library composition"),plotOutput("libraryPlotFiltered"),
+          actionButton("makeHighExpr","Baseline highly expressed genes"),plotOutput("highExprPlot",height="700px"),
+          actionButton("makeHighExprFiltered","Applied highly expressed genes"),plotOutput("highExprPlotFiltered",height="700px"))
+      )))
+)

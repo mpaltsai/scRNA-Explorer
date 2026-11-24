@@ -46,11 +46,12 @@ preprocessing_qc_step <- function(object,parameters) {
       ggplot2::ggsave(path,plot=plot,width=9,height=6,dpi=110)
       result$artifacts <- c(result$artifacts,path)
       reference_path <- file.path(directory,"cell-cycle-marker-coverage.csv")
-      reference <- checks$cell_cycle$reference
-      coverage <- rbind(data.frame(program="S",gene=reference$s_genes),data.frame(program="G2M",gene=reference$g2m_genes))
-      coverage$in_matrix <- coverage$gene %in% rownames(result$object)
+      coverage <- checks$cell_cycle$marker_mapping
+      coverage$in_matrix <- coverage$status=="matched"
       utils::write.csv(coverage,reference_path,row.names=FALSE)
-      result$artifacts <- c(result$artifacts,reference_path)
+      annotation_path <- file.path(directory,"cell-cycle-annotation-provenance.txt")
+      writeLines(capture.output(dput(checks$cell_cycle$annotation)),annotation_path)
+      result$artifacts <- c(result$artifacts,reference_path,annotation_path)
     }
     if (identical(checks$doublets$status,"scored")) {
       path <- file.path(directory,"doublet-scores.png")

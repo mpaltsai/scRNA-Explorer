@@ -14,6 +14,46 @@ Working design from the feature-planning interview. Accepted scope is recorded s
 - Prioritize annotation and subclustering, followed by condition comparisons.
 - Reuse compatible existing analysis objects, helpers, and fixtures across tickets. Do not create fresh objects or duplicate full matrices solely for ticket boundaries; create derived data only when required by the agreed feature and preserve original data.
 
+## Shiny integration interview (2026-11-24)
+
+The user now requests stepwise integration and local testing of the developed R routines in the existing Shiny app, preserving its functionality. This starts an integration-design interview; it does not establish that the pilot methods have been validated across datasets or authorize deployment. Existing decisions about optional QC checks, `nUMI >= 100`, original-count preservation, explicit acceptance and downstream invalidation remain in force.
+
+Confirmed requirements for this integration are improved input handling, AnnotationHub-derived gene annotation, existing QC plots with additional controls, and consistent orchestration of user decisions, displayed results and selected cells. Gene annotation here means identifying/mapping genes, distinct from biological cluster annotation. Scripts should have useful comments explaining inputs, outputs, identifier/metadata preservation, intentional side effects, method assumptions and the reasons for state transitions. Changes to `server.R` should be small enough to inspect and test one step at a time.
+
+The user clarified that integration must retain the existing data lifecycle. Each sample has a baseline SingleCellExperiment containing cells with `nUMI >= 100`, with QC metrics, and a separate QC-filtered SingleCellExperiment. The baseline provides the before-filtering reference; the filtered data feed the downstream Seurat workflow. Multiple samples are filtered separately before entering the joint normalization/integration/clustering workflow. Seurat remains the representation for clustering, cell-type annotation and the existing correlation workflow. This does not change the order of normalization/PCA and integration within that workflow. New diagnostics and decision records must fit around these objects, preserving their relationships and metadata rather than adding persistent expression copies for each control change.
+
+The user accepted revised Q29–Q32:
+
+- Q29: Begin with existing input readers: preserve barcodes, feature identifiers, imported metadata and sample identity; retain supported input formats and verify expected counts/identifiers. Subsequent steps address AnnotationHub/metrics, filtering orchestration, optional diagnostics and the Seurat handoff separately.
+- Q30: Threshold edits change draft settings. Preview calculates a proposed selection and its metrics/plots while retaining the previously applied filtered SCE. Apply filtering records the settings and reason, replaces that sample's filtered SCE and refreshes its plots/downloads consistently. Previews use selection masks and diagnostics without persistent expression copies for each change.
+- Q31: Initially reuse existing AnnotationHub-derived caches with visible provenance and mapping problems. Explicit compatible reference selection follows in the annotation step; compatible samples reuse a selected reference. Preserve original feature identifiers, keep annotations alongside them, do not silently change references and retain unknown provenance as unknown.
+- Q32: Record filtering decisions per sample. Record the filtered sample revisions that produced the downstream Seurat analysis. Refiltering one sample preserves other samples' applied filters and marks dependent combined analysis out of date. Decision records contain settings, reasons, cell membership and diagnostic/reference versions without new full objects for each decision.
+
+The user also accepted reader policies Q33–Q35, confirming shared understanding of the first reader slice:
+
+- Q33: Preserve distinct stable gene IDs even when they share a symbol. Duplicate primary feature IDs pause import and require a user decision; do not automatically discard, merge or select rows. Record the chosen resolution before allowing the affected input to proceed. Specific resolution controls must expose the effect on counts and feature identity.
+- Q34: This UMI workflow accepts nonnegative, finite, integer-valued counts. Report negative, missing, nonfinite and fractional values as incompatible input; do not round, impute or reinterpret normalized expression as raw counts. Zero-count cells may be read and subsequently fail the agreed initial UMI filter.
+- Q35: Preserve supplied barcodes. When barcodes are absent, use reproducible generated cell identifiers explicitly marked as generated. Preserve sample association and use reversible sample-qualified internal IDs to distinguish repeated barcodes across samples.
+
+The first implementation slice covers commented readers, focused regression tests and minimal Shiny input wiring, with local inspection before later stages. Annotation and QC-control changes follow separately; later integration stages retain their own design and test checkpoints.
+
+Implementation checkpoints now available in the isolated `feat/shiny-input-integration` worktree:
+
+- Input review: supported readers, session-specific ZIP storage, explicit duplicate-ID decisions, and current selection/reading/completion feedback. The user manually tested the input formats.
+- Gene annotation/metrics/baseline: reuse cached AnnotationHub-derived references with honest unknown provenance; choose feature-ID types per sample and optional version stripping for lookup only. Preserve feature rows, counts and imported metadata, expose ambiguous/unmapped mappings and unavailable gene-dependent evidence, and construct baseline SCEs with `nUMI >= 100`. Current canonical values use `qc_*` fields so conflicting imported fields remain intact. The original legacy helper files remain available for reference; the development app no longer uses their identifier-rewriting annotation path.
+
+The QC review checkpoint now provides per-sample draft/Preview/Apply state,
+recorded filtering decisions, overview/joint/ribosomal/annotation-coverage plots,
+rule impacts/overlaps and threshold sensitivity. It preserves the fixed baseline
+and one applied SCE per sample; previews contain metric tables and masks only.
+Applied sample revisions gate normalization and identify its inputs. See the
+[QC review workflow](qc-review-workflow.md) for controls, reused code and tests.
+Optional diagnostic panels and complete metadata transfer into downstream
+Seurat remain subsequent checkpoints. No biological filtering threshold or
+reference update has been silently selected.
+
+The user accepted the proposed direction for explicit annotation-mapping decisions and requested ribosomal gene annotations for possible later exclusion. The current audit panel is not yet a per-feature decision editor: candidate selection/keeping unresolved, reason logging, metric-impact preview and explicit application remain the next annotation-review checkpoint. The user explicitly selected separate labels for cytosolic ribosomal proteins, mitochondrial ribosomal proteins, rRNA and rRNA pseudogenes. The implementation distinguishes nuclear and mitochondrial rRNA and records a parent reference-supported structural-protein group. These annotations preserve counts and do not apply exclusions. The exact exclusion target (for example variable features versus a derived count matrix) remains a later user decision. Missing membership evidence must not be turned into a confirmed negative annotation.
+
 ## Confirmed subclustering behavior (Q7)
 
 - Users select one or more parent clusters for a separate subanalysis; the parent analysis remains available.
@@ -26,7 +66,7 @@ Normalization/scaling and integration choices were subsequently settled in Q8–
 
 ## Confirmed workflow choices (Q1–Q6)
 
-- Q1: Existing defaults remain unchanged; new preprocessing steps are opt-in.
+- Q1: Existing defaults remain unchanged; new preprocessing steps are opt-in. The user subsequently confirmed one boundary correction to the baseline initial UMI filter: keep `nUMI >= 100`, including exactly 100 UMIs. Doublet detection, ambient-RNA assessment, cell-cycle scoring and experimental threshold suggestions remain optional QC additions; running a check does not automatically apply exclusions.
 - Q2: Add an editable/uploadable sample-information table and optional barcode-level metadata for multiplexed captures. Require fields only when the selected analysis needs them. Do not infer biological replication from filenames.
 - Q3: Doublet detection defaults to flagging. Exclusion is a separate user action after review, with scores, labels, exclusion reasons, and original data retained.
 - Q4: Preserve enrichment-based annotation and add manual annotation and SingleR suggestions. Store automatic suggestions separately from user-approved labels and support unassigned populations.
@@ -133,6 +173,20 @@ These observations inform pending decisions about configurable integration, sign
 These observations are read-only findings, not authorization to change existing routines.
 
 ## Method references
+
+### Local AnnotationHub cache maintenance (user confirmed, 2026-11-24)
+
+Use the locally exported `.Rda` tables during normal analysis. Provide a monthly
+due notice and explicit catalogue check, with no scheduled system service.
+Download a selected compatible resource only after an explicit user action;
+save it separately and pin reference provenance to each analysis. Unknown
+resource details of existing exports remain unknown. Species/build matching is
+required for new references, including hg19/GRCh37 compatibility for GSE176031.
+Changing the selected reference requires fresh preparation and review; checks
+and downloads alone do not change analysis state. Ribosomal OrgDb provenance
+remains separate. See [the cache workflow](annotation-reference-cache.md).
+
+### Method sources
 
 - [miQC: joint modeling of mitochondrial fraction and detected genes](https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1009290)
 - [SampleQC: robust multivariate, multi-cell-type, multi-sample QC](https://doi.org/10.1186/s13059-023-02859-3)

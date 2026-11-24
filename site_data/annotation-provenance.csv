@@ -1,0 +1,3 @@
+species,md5,source,resource_id,snapshot_date,annotation_release,genome_build,provenance_status
+Homo sapiens,bc11cf517596fd379da4dbe44f964d60,AnnotationHub export (origin confirmed by the user),,,,,Exact resource not recovered; local cached databases did not match the export
+Mus musculus,cff0088490827a2c610d9245654725a7,AnnotationHub export (origin confirmed by the user),,,,,Exact resource not recovered; local cached databases did not match the export

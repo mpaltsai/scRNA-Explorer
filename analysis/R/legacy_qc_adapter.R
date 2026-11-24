@@ -13,7 +13,7 @@ make_legacy_qc_steps <- function(app_root = "site_data") {
     if (!file %in% c("annotations_hsap.Rda", "annotations_mmus.Rda")) stop("Unexpected annotation file.")
     base::load(file.path(app_root, file), envir = envir, ...)
   }
-  source_files <- file.path(app_root, "R", c("createMetadata.R", "filter_cells.R", "createQCPlots.R"))
+  source_files <- file.path(app_root, "R", c("createMetadata.R", "filter_cells.R", "createQCPlots.R", "annotation_reference_cache.R", "gene_annotations.R"))
   for (path in source_files) sys.source(path, envir = legacy)
 
   metadata_step <- function(object, parameters) {
@@ -243,8 +243,8 @@ body{font-family:var(--font-sans);color:var(--foreground);margin:0}p{line-height
     '</div></div><div class="card"><div class="muted">Median UMIs</div><div class="value">', stats::median(metrics$nUMI),
     '</div></div><div class="card"><div class="muted">Median mitochondrial fraction</div><div class="value">',
     sprintf('%.2f%%',100*stats::median(metrics$mitoRatio)), '</div></div></div>',
-    '<p>No filtering has run. The existing initial <code>nUMI &gt; 100</code> rule would remove <strong>',
-    sum(metrics$nUMI <= 100), ' cells</strong>. Plot reference lines mark observed ranges, not recommended cutoffs.</p>',
+    '<p>No filtering has run. The initial <code>nUMI &gt;= 100</code> rule would remove <strong>',
+    sum(metrics$nUMI < 100), ' cells</strong>. Plot reference lines mark observed ranges, not recommended cutoffs.</p>',
     optional_html,'<details><summary>Input integrity checks</summary><ul>', check_rows, '</ul></details>',
     '<details><summary>Exact functions reused and plotting warnings</summary><table><thead><tr><th>Function</th><th>Result</th><th>Warnings / errors</th></tr></thead><tbody>',
     plot_rows, '</tbody></table></details>', paste(panels, collapse = "\n"),

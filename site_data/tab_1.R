@@ -50,7 +50,7 @@ tab1<-     tabPanel("Data input/preprocessing",
                           #textInput(inputId="genes10XInput", "Filename of genes", value = NULL),
                           
                           helpText("You can provide .tsv or gzipped versions (.tsv.gz)"),
-                          helpText("This file is optional, as we don't perform any analysis with barcodes"),
+                          helpText("Barcodes are optional. Supplied barcodes are preserved; absent barcodes receive reproducible identifiers marked as generated."),
                           fileInput(inputId="barcodes10XInput", NULL, buttonLabel = "Upload barcodes",
                                     multiple = FALSE, accept = c(".tsv", ".tsv.gz")),
                           textOutput("uploadbarcodes10XValidation")
@@ -76,6 +76,7 @@ tab1<-     tabPanel("Data input/preprocessing",
                         
                         #read data
                         actionButton("startQC", "Read data"),
+                        uiOutput("importBusy"),
                         
                         span(textOutput("readData") %>% withSpinner(), style = "color:dodgerblue"),
                         
@@ -83,16 +84,18 @@ tab1<-     tabPanel("Data input/preprocessing",
                         helpText("We have to add some metadata regarding the genes present in your dataset"),
                         #set gene annotation parameteres
                         
-                        #added code in createMetadata function to detect automatically if the annotation is in gene names or Ensembl IDs, so variable typeGeneId is no longer needed
-                        #radioButtons(inputId= "typeGeneId", label = "How are features (genes) annotated?",
-                        #             choices = c("Gene names" = TRUE, "Ensembl IDs" = FALSE ), selected = character(0), inline=TRUE),
-                        #helpText("Note that in the case of 10X files we follow the Ensembl annotation"),
+                        helpText("Gene annotations load from a local cache. Checking for updates or downloading a separate reference does not change prepared results."),
+                        uiOutput("annotationIdControls"),
+                        checkboxInput("annotationStripVersion", "Ignore Ensembl version suffixes for lookup only", FALSE),
                         
                         #set organism parameteres
                         radioButtons(inputId= "typeOrganism", label = "Which organism comes your data from?",
                                      choices = c("Homo sapiens", "Mus musculus" ), selected = character(0), inline=TRUE),
+                        uiOutput("annotationGenomeControls"),
+                        uiOutput("annotationReferenceControls"),
                         
                         actionButton("addMetadata", 'Add gene annotations'),
+                        uiOutput("annotationBusy"),
                         
                         span(textOutput("paramsAddMetadata") %>% withSpinner(), style = "color:dodgerblue"),
                         
@@ -119,8 +122,30 @@ tab1<-     tabPanel("Data input/preprocessing",
                       
                       
                       mainPanel(
-                        
-                        
+                        h4("Import review"),
+                        tableOutput("importSummary"),
+                        tableOutput("importDuplicateTable"),
+                        uiOutput("importDecisionControls"),
+                        tableOutput("importDecisionHistory"),
+                        downloadButton("importDecisionDownload", "Download import decisions"),
+                        h4("Gene annotation and QC review"),
+                        tags$details(tags$summary("Annotation reference maintenance"),
+                          helpText("A monthly due notice is based on the last successful catalogue check. Check explicitly when convenient; reading data and preparing annotations never contact AnnotationHub. The catalogue itself may require a download. Resources are limited to the installed Bioconductor version and checked snapshot."),
+                          actionButton("annotationCheckUpdates","Check for reference updates"),
+                          uiOutput("annotationUpdateBusy"),textOutput("annotationUpdateStatus"),
+                          tableOutput("annotationCandidates"),uiOutput("annotationDownloadControls"),
+                          helpText("New references are saved alongside the original. Selecting another reference or genome build clears the current annotation/QC preparation and its dependent results; prepare and review them again. Ribosomal protein GO annotations still use the separately recorded installed OrgDb snapshot.")),
+                        tableOutput("annotationProvenance"),
+                        tableOutput("annotationSummary"),
+                        h5("Ribosomal annotations"),
+                        helpText("GO-supported structural ribosomal proteins and rRNA biotypes are labelled separately. These labels do not remove genes or change QC count totals. Protein parent/subgroups overlap; counts are not additive. Not annotated in the reference does not mean a confirmed non-ribosomal gene."),
+                        tableOutput("ribosomalSummary"),
+                        helpText("First 20 gene-mapping or ribosomal-classification issues are shown. These features remain in the counts. Download the complete mapping for inspection."),
+                        tableOutput("annotationIssues"),
+                        downloadButton("annotationMappingDownload", "Download gene mapping"),
+                        downloadButton("qcMetricsDownload", "Download pre-initial-filter QC metrics"),
+                        h4("QC baseline (UMIs >= 100)"),
+                        tableOutput("baselineSummary")
                       )
                     )
 )

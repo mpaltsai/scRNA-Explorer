@@ -11,7 +11,8 @@ testthat::test_that("cell-cycle scoring adds diagnostic fields without filtering
   reference <- list(name="test marker reference",species="Homo sapiens",
                     s_genes=c("PCNA","MCM5"),g2m_genes=c("TOP2A","MKI67"))
   proposal <- propose_analysis_step(sce,f$directory,"cell-cycle",cell_cycle_qc_step,
-    list(organism="Homo sapiens",reference=reference,nbin=2L,ctrl=2L,method_seed=1L),input_path=f$input)
+    list(organism="Homo sapiens",reference=reference,annotation=cell_cycle_fixture_annotation(reference),
+      nbin=2L,ctrl=2L,method_seed=1L),input_path=f$input)
   testthat::expect_identical(SummarizedExperiment::assay(proposal$object,"counts"),counts)
   testthat::expect_identical(colnames(proposal$object),colnames(sce))
   testthat::expect_true(all(is.finite(proposal$object$cell_cycle_S_score)))
@@ -67,7 +68,8 @@ testthat::test_that("missing cell-cycle markers do not become zero scores", {
   on.exit(unlink(f$root,recursive=TRUE))
   reference <- list(name="missing reference",species="Homo sapiens",s_genes="AbsentS",g2m_genes="B2M")
   testthat::expect_error(propose_analysis_step(f$object,f$directory,"cell-cycle",cell_cycle_qc_step,
-    list(organism="Homo sapiens",reference=reference,method_seed=1L),input_path=f$input),"no matching features")
+    list(organism="Homo sapiens",reference=reference,annotation=cell_cycle_fixture_annotation(reference),
+      method_seed=1L),input_path=f$input),"no matching features")
   testthat::expect_null(f$object$cell_cycle_S_score)
 })
 
@@ -85,7 +87,8 @@ testthat::test_that("cell-cycle scoring on Seurat preserves its active assay and
   saveRDS(object,f$input)
   reference <- list(name="test marker reference",species="Homo sapiens",s_genes=c("PCNA","MCM5"),g2m_genes=c("TOP2A","MKI67"))
   proposal <- propose_analysis_step(object,f$directory,"cell-cycle",cell_cycle_qc_step,
-    list(organism="Homo sapiens",reference=reference,nbin=2L,ctrl=2L,method_seed=1L),input_path=f$input)
+    list(organism="Homo sapiens",reference=reference,annotation=cell_cycle_fixture_annotation(reference),
+      nbin=2L,ctrl=2L,method_seed=1L),input_path=f$input)
   testthat::expect_identical(SeuratObject::DefaultAssay(proposal$object),"ADT")
   testthat::expect_identical(SeuratObject::LayerData(proposal$object,assay="RNA",layer="counts"),counts)
   testthat::expect_identical(proposal$object@misc$geo,list(source="original"))

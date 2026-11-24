@@ -1,0 +1,78 @@
+testthat::test_that("annotation controls require explicit settings and produce one baseline per sample", {
+  app_root <- normalizePath(file.path("..","..","site_data"))
+  counts <- Matrix::Matrix(matrix(c(9,10,80,10,20,70,0,1,100),nrow=3,
+    dimnames=list(c("MT-ND1","HBB","A1BG"),c("below","boundary","above"))),sparse=TRUE)
+  cache <- load_gene_annotation_cache("Homo sapiens",app_root)
+  ids <- vapply(rownames(counts),function(n) cache$table$gene_id[match(n,cache$table$gene_name)],character(1))
+  id_counts <- counts; rownames(id_counts) <- ids
+  server <- function(input,output,session) {
+    imported <- shiny::reactiveVal(list(A=new_count_import(counts,"A"),B=new_count_import(id_counts,"B")))
+    controller <- annotation_qc_server(input,output,session,function() imported(),app_root)
+  }
+  shiny::testServer(server,{
+    session$setInputs(addMetadata=0,initFiltering=0)
+    session$setInputs(addMetadata=1)
+    testthat::expect_null(controller$prepared())
+    testthat::expect_match(output$paramsAddMetadata,"Select a species")
+    session$setInputs(typeOrganism="Homo sapiens",annotationKey_1="gene_name",annotationKey_2="gene_id")
+    session$setInputs(addMetadata=2); session$flushReact()
+    testthat::expect_identical(names(controller$prepared()),c("A","B"))
+    testthat::expect_null(controller$baseline())
+    testthat::expect_match(output$paramsAddMetadata,"Annotations and QC metrics prepared")
+    testthat::expect_match(output$annotationProvenance,"Unknown")
+    testthat::expect_match(output$ribosomalSummary,"ribosomal_protein")
+    testthat::expect_identical(controller$prepared()$A$config$ribosomal_reference$status,"available")
+    session$setInputs(initFiltering=1)
+    b <- controller$baseline()
+    testthat::expect_identical(names(b),c("A","B"))
+    testthat::expect_identical(colnames(b$A),c("boundary","above"))
+    testthat::expect_identical(colnames(b$B),c("boundary","above"))
+    testthat::expect_equal(baseline_qc_metrics(b$A)$mitoRatio,baseline_qc_metrics(b$B)$mitoRatio)
+    testthat::expect_length(intersect(b$A$qc_cell_id,b$B$qc_cell_id),0)
+    session$setInputs(annotationStripVersion=TRUE)
+    testthat::expect_null(controller$baseline())
+    testthat::expect_null(controller$prepared())
+    session$setInputs(initFiltering=2)
+    testthat::expect_match(output$initDataFilt,"Prepare and review")
+    testthat::expect_null(controller$baseline())
+  })
+})
+
+testthat::test_that("the actual app creates a metadata-preserving SCE baseline and existing QC metrics", {
+  f <- input_fixture(); on.exit(unlink(f$root,recursive=TRUE))
+  counts <- Matrix::Matrix(matrix(c(9,10,80,10,20,70,0,1,100),nrow=3,
+    dimnames=list(c("MT-ND1","HBB","A1BG"),c("below","boundary","above"))),sparse=TRUE)
+  source_object <- SingleCellExperiment::SingleCellExperiment(assays=list(counts=counts,extra=counts))
+  source_object$geo_accession <- rep("GSM101",3)
+  source_object$sample <- rep("original biological label",3)
+  S4Vectors::metadata(source_object)$geo <- list(build="hg19",source="fixture")
+  p <- file.path(f$root,"original.rds"); saveRDS(source_object,p)
+  hash <- tools::md5sum(p)
+  env <- new.env(parent=environment()); env$`%>%` <- dplyr::`%>%`
+  withr::local_dir(file.path("..","..","site_data"))
+  app <- source("server.R",local=env)$value
+  shiny::testServer(app,{
+    session$setInputs(testData="2",typeData="3",startQC=0,addMetadata=0,initFiltering=0)
+    session$setInputs(rdsFile=data.frame(name="original.rds",datapath=p))
+    session$setInputs(startQC=1); session$flushReact()
+    session$setInputs(typeOrganism="Homo sapiens",annotationKey_1="gene_name")
+    session$setInputs(addMetadata=1); session$flushReact()
+    session$setInputs(initFiltering=1)
+    b <- calc_se()$my_list$sample$se
+    testthat::expect_identical(colnames(b),c("boundary","above"))
+    testthat::expect_identical(SummarizedExperiment::assay(b,"counts"),counts[,2:3])
+    testthat::expect_identical(SummarizedExperiment::assay(b,"extra"),counts[,2:3])
+    testthat::expect_identical(b$geo_accession,rep("GSM101",2))
+    testthat::expect_identical(b$sample,rep("original biological label",2))
+    testthat::expect_identical(S4Vectors::metadata(b)$geo,S4Vectors::metadata(source_object)$geo)
+    session$setInputs(selectSample="sample",makeMetrics=0)
+    session$setInputs(makeMetrics=1)
+    testthat::expect_equal(calc_metrics()$nUMI,c(100,101))
+    testthat::expect_identical(calc_metrics()$sample,rep("sample",2))
+    my_react_vals$loaded.dataSO.combined.no.cluster <- "old downstream result"
+    session$setInputs(annotationStripVersion=TRUE)
+    testthat::expect_null(annotator$baseline())
+    testthat::expect_null(my_react_vals$loaded.dataSO.combined.no.cluster)
+    testthat::expect_identical(tools::md5sum(p),hash)
+  })
+})

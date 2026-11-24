@@ -16,8 +16,8 @@ initial_filt <- function(list_samples, a){
   i=1
   for(metaData in list_samples){
     
-    # Keep cells with nUMI greater than 100
-    idx <- which(metaData$nUMI > 100)
+    # Keep cells with at least 100 UMIs, including the boundary value.
+    idx <- which(metaData$nUMI >= 100)
     # Extract the counts for those cells
     counts_c <- metaData$counts[, idx] 
     # Extract the metadata for those cells

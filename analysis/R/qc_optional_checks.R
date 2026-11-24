@@ -18,6 +18,63 @@ seurat_cell_cycle_reference <- function(organism="Homo sapiens") {
     s_genes=e$cc.genes.updated.2019$s.genes,g2m_genes=e$cc.genes.updated.2019$g2m.genes)
 }
 
+# Reuse the app's AnnotationHub-derived cache; no live lookup or identifier rewrite.
+load_cell_cycle_annotation <- function(organism, feature_id_type, app_root="site_data",
+    reference_id="bundled",cache_dir=NULL) {
+  if (length(feature_id_type)!=1L || !feature_id_type %in% c("gene_name","gene_id")) stop("Select feature_id_type: gene_name or gene_id.")
+  # The standalone workflow and Shiny use the same cache loader. Source into a
+  # private environment so this does not depend on how the app was launched.
+  path <- normalizePath(file.path(app_root,"R","gene_annotations.R"),mustWork=TRUE)
+  e <- new.env(parent=baseenv())
+  sys.source(path,envir=e)
+  result <- e$load_gene_annotation_cache(organism,app_root,include_ribosomal=FALSE,
+    reference_id=reference_id,cache_dir=cache_dir)
+  result$feature_id_type <- feature_id_type
+  result$provenance$loader_path <- path
+  result$provenance$loader_md5 <- unname(tools::md5sum(path))
+  result
+}
+
+.qc_cell_cycle_mapping <- function(features, requested, annotation, organism, strip_version=FALSE) {
+  if (!is.list(annotation) || is.null(annotation$table)) stop("Supply annotation: an AnnotationHub-derived table with species, feature_id_type and provenance; or use load_cell_cycle_annotation().")
+  if (!identical(annotation$species,organism)) stop("Annotation species must match the selected organism.")
+  key <- annotation$feature_id_type
+  if (length(key)!=1L || !key %in% c("gene_id","gene_name")) stop("Select annotation feature_id_type: gene_name or gene_id.")
+  a <- annotation$table
+  if (!is.data.frame(a) || !all(c("gene_id","gene_name") %in% names(a))) stop("Annotation table needs gene_id and gene_name columns.")
+  if (!is.list(annotation$provenance) || is.null(annotation$provenance$source) ||
+      length(annotation$provenance$source)!=1L || is.na(annotation$provenance$source) ||
+      !nzchar(annotation$provenance$source)) stop("Record annotation provenance, including its source.")
+  if (!is.logical(strip_version) || length(strip_version)!=1L || is.na(strip_version)) stop("strip_ensembl_version must be TRUE or FALSE.")
+  normalize_id <- function(x) if (strip_version) sub("^(ENS[A-Z]*G[0-9]+)\\.[0-9]+$","\\1",x) else x
+  a <- unique(data.frame(gene_id=normalize_id(as.character(a$gene_id)),gene_name=as.character(a$gene_name)))
+  valid <- !is.na(a$gene_id) & nzchar(a$gene_id) & !is.na(a$gene_name) & nzchar(a$gene_name)
+  invalid_rows <- sum(!valid)
+  a <- a[valid,,drop=FALSE]
+  feature_keys <- if (key=="gene_id") normalize_id(features) else features
+  rows <- lapply(names(requested),function(program) do.call(rbind,lapply(requested[[program]],function(marker) {
+    ids <- unique(a$gene_id[a$gene_name==marker])
+    candidates <- if (length(ids)) features[feature_keys %in% if (key=="gene_id") ids else marker] else character()
+    ambiguous <- length(ids)>1L || (length(ids)==1L && length(unique(a$gene_name[a$gene_id %in% ids]))>1L)
+    status <- if (!length(ids)) "missing_annotation" else if (ambiguous) "ambiguous_annotation" else if (!length(candidates)) "missing_feature" else if (length(candidates)>1L) "ambiguous_features" else "matched"
+    data.frame(program=program,marker_gene=marker,annotation_gene_ids=paste(ids,collapse=";"),
+      candidate_features=paste(candidates,collapse=";"),status=status,
+      matched_feature=if (status=="matched") candidates else NA_character_)
+  })))
+  mapping <- do.call(rbind,rows)
+  # A feature cannot independently identify both programs.
+  shared <- intersect(mapping$matched_feature[mapping$program=="S" & mapping$status=="matched"],
+    mapping$matched_feature[mapping$program=="G2M" & mapping$status=="matched"])
+  ambiguous <- mapping$status=="matched" & mapping$matched_feature %in% shared
+  mapping$status[ambiguous] <- "ambiguous_program"
+  mapping$matched_feature[ambiguous] <- NA_character_
+  matched <- lapply(names(requested),function(p) mapping$matched_feature[mapping$program==p & mapping$status=="matched"])
+  names(matched) <- names(requested)
+  list(mapping=mapping,matched=matched,provenance=annotation$provenance,
+    species=annotation$species,feature_id_type=key,strip_ensembl_version=strip_version,
+    table_hash=digest::digest(annotation$table,algo="sha256"),invalid_annotation_pairs=invalid_rows)
+}
+
 cell_cycle_qc_step <- function(object,parameters) {
   if (!requireNamespace("Seurat",quietly=TRUE)) stop("Existing Seurat installation required.")
   reference <- parameters$reference
@@ -34,8 +91,10 @@ cell_cycle_qc_step <- function(object,parameters) {
   if (!all(vapply(requested,function(x) is.character(x) && length(x)>0L && !anyNA(x) && all(nzchar(x)),logical(1)))) {
     stop("Supply nonempty S and G2M gene sets.")
   }
-  matched <- lapply(requested,intersect,y=rownames(counts))
-  if (any(lengths(matched)==0L)) stop("A cell-cycle gene set has no matching features; scores are not assigned zero.")
+  annotation <- .qc_cell_cycle_mapping(rownames(counts),requested,parameters$annotation,
+    parameters$organism,if (is.null(parameters$strip_ensembl_version)) FALSE else parameters$strip_ensembl_version)
+  matched <- annotation$matched
+  if (any(lengths(matched)==0L)) stop("A cell-cycle gene set has no matching features after unambiguous annotation mapping; scores are not assigned zero. Inspect mappings with .qc_cell_cycle_mapping().")
   scale_factor <- if (is.null(parameters$scale_factor)) 10000 else parameters$scale_factor
   nbin <- if (is.null(parameters$nbin)) 24L else parameters$nbin
   ctrl <- if (is.null(parameters$ctrl)) min(lengths(matched)) else parameters$ctrl
@@ -65,8 +124,10 @@ cell_cycle_qc_step <- function(object,parameters) {
   object$cell_cycle_G2M_score <- temporary$G2M.Score
   object$cell_cycle_phase <- as.character(temporary$Phase)
   list(object=object,diagnostics=list(status="scored",reference=reference,
+    annotation=annotation[setdiff(names(annotation),c("mapping","matched"))],marker_mapping=annotation$mapping,
     coverage=data.frame(program=names(requested),requested=as.integer(lengths(requested)),matched=as.integer(lengths(matched))),
-    matched_genes=matched,missing_genes=Map(setdiff,requested,matched),
+    matched_genes=matched,missing_genes=stats::setNames(lapply(names(requested),function(p)
+      annotation$mapping$marker_gene[annotation$mapping$program==p & annotation$mapping$status!="matched"]),names(requested)),
     scoring_gene_map=data.frame(original_gene=unique(unlist(matched)),
       temporary_gene=scoring_names[match(unique(unlist(matched)),rownames(counts))]),
     normalization="Temporary LogNormalize for diagnostic scoring only",scale_factor=scale_factor,
