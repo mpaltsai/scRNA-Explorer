@@ -6,8 +6,8 @@ The development app now has a [QC review checkpoint](../docs/qc-review-workflow.
 with new plots and explicit per-sample Preview/Apply decisions. That guide
 describes the current QC tab, which replaces separate metrics/redraw button
 sequences. The standalone diagnostic instructions below remain available;
-optional doublet, ambient-RNA and cell-cycle panels are not yet connected to the
-app's filtering controller.
+optional doublet, ambient-RNA and cell-cycle panels are now connected as
+diagnostic evidence in the same QC tab; see [optional QC panels](../docs/optional-qc-panels.md).
 
 ## Shiny input integration: first review checkpoint
 
@@ -122,7 +122,7 @@ proposal <- propose_analysis_step(
   sce, directory, "preprocessing-qc-review", preprocessing_qc_step,
   parameters = parameters, input_path = input_path,
   source_files = c(legacy$source_files, "analysis/R/analysis_runner.R",
-                   "analysis/R/legacy_qc_adapter.R", "analysis/R/qc_optional_checks.R",
+                   "analysis/R/legacy_qc_adapter.R", "analysis/R/qc_optional_checks.R", "site_data/R/qc_optional_checks.R",
                    "analysis/examples/preprocessing_qc_step.R")
 )
 proposal$diagnostics$optional_checks

@@ -1,7 +1,7 @@
 # Each sample owns a draft, a compact preview, one applied SCE and a decision
 # history. Control IDs include the cohort generation and sample index, preventing
 # another sample's numeric/slider values from being applied during a UI switch.
-qc_review_server <- function(input,output,session,baselines) {
+qc_review_server <- function(input,output,session,baselines,optional_results=function(sample) list()) {
   entries <- shiny::reactiveVal(list())
   baseline_metrics <- shiny::reactiveVal(NULL)
   generation <- shiny::reactiveVal(0L)
@@ -98,7 +98,10 @@ qc_review_server <- function(input,output,session,baselines) {
     e <- shiny::isolate(entries())
     tryCatch({
       p <- preview();if(is.null(p)) stop("Preview the current thresholds for this sample before applying.")
-      result <- qc_apply_filter(baselines()[[n]],p,input$qcApplyReason,e[[n]]$history)
+      evidence<-optional_results(n)
+      ids<-lapply(evidence,function(r) r[c("method","status","revision","baseline_hash")])
+      result <- qc_apply_filter(baselines()[[n]],p,input$qcApplyReason,e[[n]]$history,optional_evidence=ids)
+      if(length(evidence)) result$object<-qc_attach_optional(result$object,evidence,e[[n]]$baseline_hash)
       e[[n]]$filtered <- result$object;e[[n]]$applied<-result$decision;e[[n]]$history<-result$history
       e[[n]]$message <- paste("Applied",sum(p$keep),"of",length(p$keep),"baseline cells. This sample's plots, download and downstream input use the recorded revision.")
     },error=function(err) {e[[n]]$message<<-paste("Apply stopped:",conditionMessage(err))})
@@ -188,7 +191,9 @@ qc_review_server <- function(input,output,session,baselines) {
   output$qcDecisionsDownload <- shiny::downloadHandler(filename=function() "qc-filtering-decisions.rds",
     content=function(path) saveRDS(lapply(entries(),`[[`,"history"),path))
   output$QCDownload <- shiny::downloadHandler(filename=function() paste0(selected(),"-applied-qc.rds"),content=function(path) {
-    e<-current();shiny::req(e$filtered);saveRDS(e$filtered,path)
+    e<-current();shiny::req(e$filtered);evidence<-optional_results(selected())
+    object<-if(length(evidence)) qc_attach_optional(e$filtered,evidence,e$baseline_hash) else e$filtered
+    saveRDS(object,path)
   })
   # Preserve original plotting routines in an additional review panel. Pairing
   # via a single faceted plot gives both stages identical axes/colour scales.
@@ -238,6 +243,7 @@ qc_review_server <- function(input,output,session,baselines) {
   filtered <- shiny::reactive({e<-entries();if(!length(e)) NULL else lapply(e,`[[`,"filtered")})
   revisions <- shiny::reactive(vapply(entries(),function(e) if(is.null(e$applied)) "" else e$applied$revision,character(1)))
   list(selected=selected,metrics=shiny::reactive({e<-current();if(is.null(e)) NULL else e$metrics}),
+    baseline_ids=shiny::reactive(vapply(entries(),`[[`,character(1),"baseline_hash")),
     draft=draft,preview=preview,selection=selection,comparison=comparison,sensitivity=sensitivity,control_ids=control_ids,
     filtered=filtered,revisions=revisions,history=shiny::reactive(lapply(entries(),`[[`,"history")),
     require_ready=shiny::reactive(qc_require_applied(baselines(),filtered())))

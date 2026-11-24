@@ -94,7 +94,7 @@ qc_filter_proposal <- function(metrics,thresholds,baseline_hash) {
     summary=data.frame(baseline_cells=nrow(metrics),retained=sum(failed==0L),excluded=sum(failed>0L)))
 }
 
-qc_apply_filter <- function(object,proposal,reason,history=list()) {
+qc_apply_filter <- function(object,proposal,reason,history=list(),optional_evidence=NULL) {
   if (length(reason)!=1L || is.na(reason) || !nzchar(trimws(reason))) stop("Provide a reason before applying filtering.")
   if (!identical(proposal$baseline_hash,qc_baseline_signature(object)) ||
       !identical(proposal$per_cell$cells,colnames(object))) stop("Preview is not for this baseline; preview again.")
@@ -112,6 +112,7 @@ qc_apply_filter <- function(object,proposal,reason,history=list()) {
     # Hash function text/formals, not closure environments containing app state.
     implementation_hash=digest::digest(lapply(list(qc_rule_spec,qc_review_metrics,qc_validate_thresholds,
       .qc_rule_failures,qc_filter_proposal,qc_apply_filter),function(f) list(formals=formals(f),body=deparse(body(f)))),algo="sha256"))
+  if(length(optional_evidence)) record$optional_evidence<-optional_evidence
   record$revision <- digest::digest(list(record,sequence=length(history)+1L),algo="sha256")
   history <- c(history,list(record))
   filtered <- object[,verified$keep,drop=FALSE]

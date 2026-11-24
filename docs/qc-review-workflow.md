@@ -116,8 +116,10 @@ reduced-evidence filter requires a separate explicit design and validation.
   normalization/integration. Known issues in those helpers, including the
   two-sample path and dense conversion, still need the later Seurat stage.
 
-Doublet, ambient-RNA, cell-cycle and model-based suggestion panels remain the
-next integration step. They are not used to exclude cells by this controller.
+Doublet, ambient-RNA and cell-cycle controls/plots are now available under
+**Optional checks** inside this QC tab; see [their workflow](optional-qc-panels.md).
+They are not used to exclude cells by this controller. Model-based threshold
+suggestions remain a later integration step.
 Top-gene concentration extensions and a full analysis-bundle restore workflow
 are also separate work. No reference download, dependency install, source-data
 filtering, commit or push is performed by these tests.

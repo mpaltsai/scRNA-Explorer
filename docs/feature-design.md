@@ -48,8 +48,11 @@ rule impacts/overlaps and threshold sensitivity. It preserves the fixed baseline
 and one applied SCE per sample; previews contain metric tables and masks only.
 Applied sample revisions gate normalization and identify its inputs. See the
 [QC review workflow](qc-review-workflow.md) for controls, reused code and tests.
-Optional diagnostic panels and complete metadata transfer into downstream
-Seurat remain subsequent checkpoints. No biological filtering threshold or
+Optional doublet, exploratory ambient-RNA and cell-cycle panels now share the
+Quality Control Plots tab. They reuse baseline fits for retained subsets and
+preserve diagnostic status/uncertainty separately from filtering decisions;
+see [the optional panel workflow](optional-qc-panels.md). Complete metadata transfer
+into downstream Seurat remains a subsequent checkpoint. No biological filtering threshold or
 reference update has been silently selected.
 
 The user accepted the proposed direction for explicit annotation-mapping decisions and requested ribosomal gene annotations for possible later exclusion. The current audit panel is not yet a per-feature decision editor: candidate selection/keeping unresolved, reason logging, metric-impact preview and explicit application remain the next annotation-review checkpoint. The user explicitly selected separate labels for cytosolic ribosomal proteins, mitochondrial ribosomal proteins, rRNA and rRNA pseudogenes. The implementation distinguishes nuclear and mitochondrial rRNA and records a parent reference-supported structural-protein group. These annotations preserve counts and do not apply exclusions. The exact exclusion target (for example variable features versus a derived count matrix) remains a later user decision. Missing membership evidence must not be turned into a confirmed negative annotation.

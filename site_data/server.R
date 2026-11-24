@@ -118,9 +118,12 @@ function(input, output, session){
         },
         content = function(filename) {
           if(length(calc_se()$my_list)>1L){
-            saveRDS(calc_se()$my_list, filename)
+            objects<-calc_se()$my_list
+            for(n in names(objects)) objects[[n]]$se<-optional_qc$decorate(objects[[n]]$se,n)
+            saveRDS(objects, filename)
           }else{
-            saveRDS(calc_se()$my_list[[1]]$se, filename)
+            n<-names(calc_se()$my_list)[1]
+            saveRDS(optional_qc$decorate(calc_se()$my_list[[1]]$se,n), filename)
           }
           #saveRDS(calc_se()$my_list, file)
         }
@@ -128,7 +131,9 @@ function(input, output, session){
   
     
   ##### Per-sample QC review: immutable baseline -> Preview -> Apply #####
-  qc_review <- qc_review_server(input, output, session, annotator$baseline)
+  qc_review <- qc_review_server(input, output, session, annotator$baseline,
+    optional_results=function(sample) optional_qc$results(sample))
+  optional_qc <- qc_diagnostics_server(input,output,session,annotator$baseline,qc_review)
   my_sample_name <- qc_review$selected
   # Compatibility readers now follow the selected sample, rather than caching
   # metrics behind separate button events. These contain tables only.
@@ -166,6 +171,8 @@ function(input, output, session){
       validate(need(FALSE,conditionMessage(e)))
     })
     revisions <- qc_review$revisions()
+    # Refresh optional evidence without refitting on a retained population.
+    for(n in names(inputs)) inputs[[n]]<-optional_qc$decorate(inputs[[n]],n)
     spsComps::shinyCatch({
       object <- if(length(inputs)>1L) norm_data_and_pca_multiple(inputs) else norm_data_and_pca(inputs)
       object@misc$scrna_explorer_qc <- list(filtered_sample_revisions=revisions)
