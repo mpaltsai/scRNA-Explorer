@@ -155,3 +155,44 @@ between preview/applied modes. Confirm that an unapplied preview leaves the
 download and applied cell count unchanged. Switch samples, apply one, and verify
 the other sample's count/history remains unchanged. Review the plot labels and
 point hover behaviour in the browser; automated tests do not replace that check.
+
+## Applied expression plot timing fix
+
+The reported blank applied library-composition and highly-expressed-gene plots
+were reproduced with nonempty applied data when Apply and plot clicks arrived
+in one input batch. A plot request could record the old revision before Apply
+created the new one. The stale-result guard then stopped rendering with an empty
+validation message. Baseline requests were unaffected because their identity
+did not change on Apply.
+
+The controller now orders dependent observers explicitly: Preview at priority
+20, Apply at 10, plot requests at 0. Baseline invalidation remains higher
+priority. Missing, empty, unrequested and stale expression views have visible
+messages. A changed applied result still requires a fresh plot click; this fix
+does not reuse an image from an older sample or filtering decision.
+
+`tests/testthat/test-qc-expression-plots.R` checks both real scater helpers,
+first Apply/re-Apply, co-delivered Preview/Apply/plot actions, baseline requests,
+sample changes and explanatory validation messages. Its synthetic data are
+separate from user datasets; the installed scater's known internal
+`perCellQCMetrics` deprecation warning is handled specifically in the tests.
+
+Restart the development app before retesting. Apply filtering, then click both
+applied expression buttons. Reapply a changed filter and request the plots
+again; their data must match the current applied revision.
+
+Fix validation: all 709 recorded expectations in the full regression suite
+passed, with zero failures, errors or skips. Both applied expression images
+also rendered through the actual app server for a temporary 424-cell pilot
+subset using the originally failing input order. The source file checksum and
+595-cell baseline were unchanged; no filtered source file or runner decision
+was saved. The new tests reproduced missing images before the fix and passed
+after it. The original checkout and protected user edits remained unchanged.
+
+The work is versioned locally on `feat/shiny-input-integration`. Commit
+`3043510` checkpoints the input/annotation/QC implementation before this fix.
+The timing fix, regression test and these notes form a separate following
+commit, so that commit can be undone with `git revert <fix-commit>` while
+retaining the checkpoint. No push is required. User-owned decision-runner edits
+and diagnostic scripts are kept outside these commits; no dataset or expression
+checkpoint is included in them.

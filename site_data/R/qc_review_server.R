@@ -79,6 +79,10 @@ qc_review_server <- function(input,output,session,baselines) {
     if (!identical(valid,e$preview$thresholds) || !identical(e$baseline_hash,e$preview$baseline_hash)) return(NULL)
     e$preview
   })
+  # A browser can deliver Preview, Apply and plot clicks in one input batch.
+  # Order these dependent actions explicitly: Preview (20), Apply (10), plot
+  # request (0). Otherwise a request can capture the previous applied revision
+  # and be rejected by the stale-result guard without ever calling scater.
   shiny::observeEvent(input$qcPreview,{
     n <- selected();if(is.null(n)) return()
     e <- shiny::isolate(entries())
@@ -88,7 +92,7 @@ qc_review_server <- function(input,output,session,baselines) {
       e[[n]]$message <- "Preview ready. No filtering has been applied by this action."
     },error=function(err) {e[[n]]$preview<<-NULL;e[[n]]$message<<-paste("Preview stopped:",conditionMessage(err))})
     entries(e)
-  },ignoreInit=TRUE)
+  },ignoreInit=TRUE,priority=20)
   shiny::observeEvent(input$QCFiltering,{
     n <- selected();if(is.null(n)) return()
     e <- shiny::isolate(entries())
@@ -99,7 +103,7 @@ qc_review_server <- function(input,output,session,baselines) {
       e[[n]]$message <- paste("Applied",sum(p$keep),"of",length(p$keep),"baseline cells. This sample's plots, download and downstream input use the recorded revision.")
     },error=function(err) {e[[n]]$message<<-paste("Apply stopped:",conditionMessage(err))})
     entries(e)
-  },ignoreInit=TRUE)
+  },ignoreInit=TRUE,priority=10)
   selection <- shiny::reactive({
     e <- current();if(is.null(e)) return(NULL)
     if (!identical(input$qcView,"applied")) return(preview())
@@ -211,12 +215,20 @@ qc_review_server <- function(input,output,session,baselines) {
     requested <- shiny::reactiveVal(NULL)
     identity <- shiny::reactive({e<-current();if(is.null(e)) return(NULL)
       list(sample=selected(),baseline=e$baseline_hash,revision=if(applied && !is.null(e$applied)) e$applied$revision else "baseline")})
-    shiny::observeEvent(input[[button]],{requested(identity())},ignoreInit=TRUE)
+    shiny::observeEvent(input[[button]],{requested(identity())},ignoreInit=TRUE,priority=0)
     output[[id]] <- shiny::renderPlot({
       visible("existing")
-      shiny::req(requested(),identity(),identical(requested(),identity()))
+      e<-current()
+      shiny::validate(shiny::need(!is.null(e),"Select a sample with a QC baseline first."))
       object <- if(applied) current()$filtered else baselines()[[selected()]]
-      shiny::req(object,ncol(object)>0L);make(object)
+      # Validation messages are visible below the button. Silent req() checks
+      # made missing/empty/stale requests indistinguishable from a broken plot.
+      shiny::validate(shiny::need(!is.null(object),"Apply filtering to this sample before requesting an applied plot."))
+      shiny::validate(shiny::need(ncol(object)>0L,"No cells remain in the applied result. Revise thresholds, preview and apply again."))
+      shiny::validate(shiny::need(!is.null(requested()),"Click the plot button to generate this view."))
+      shiny::validate(shiny::need(identical(requested(),identity()),
+        "The sample or applied filtering changed. Click the plot button again for the current result."))
+      make(object)
     })
   }
   expression_plot("makeLibrary","libraryPlot",FALSE,createlibraryPlot)
