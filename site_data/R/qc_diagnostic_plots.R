@@ -65,10 +65,14 @@ qc_plot_ambient_joint <- function(d,x="nUMI") {
 qc_plot_ambient_umi_genes_clusters <- function(d) {
   # These labels are DecontX's preliminary populations within each fit, not
   # downstream biological annotations. Retained panels reuse baseline labels.
-  d$ambient_plot_cluster<-factor(d$qc_diag_ambient_population,levels=unique(d$qc_diag_ambient_population))
+  # A qualitative hue palette separates cluster labels more clearly than a
+  # sequential gradient. Stable levels keep colours identical in both panels.
+  clusters<-sort(unique(d$qc_diag_ambient_population),na.last=NA)
+  d$ambient_plot_cluster<-factor(d$qc_diag_ambient_population,levels=clusters)
+  colours<-stats::setNames(grDevices::hcl.colors(length(clusters),palette="Dark 3"),clusters)
   ggplot2::ggplot(d,ggplot2::aes(x=nUMI,y=nGene,color=ambient_plot_cluster))+
     ggplot2::geom_point(alpha=.7,size=1)+ggplot2::scale_x_log10()+ggplot2::scale_y_log10()+
-    ggplot2::scale_colour_viridis_d(drop=FALSE)+
+    ggplot2::scale_colour_manual(values=colours,drop=FALSE,na.value="#777777")+
     ggplot2::facet_grid(qc_diag_ambient_fit_group~stage,drop=FALSE)+ggplot2::theme_bw()+
     ggplot2::labs(x="UMIs (log scale)",y="Detected genes (log scale)",color="Preliminary cluster",
       caption="Colours identify preliminary DecontX clusters within each fit, not contamination levels or final cell types. No entire cluster is excluded automatically.")

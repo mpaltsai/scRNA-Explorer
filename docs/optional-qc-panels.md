@@ -157,6 +157,8 @@ does not establish model validity or independent contamination truth.
 
 **UMIs versus detected genes: preliminary ambient-RNA clusters** uses log-scaled
 count axes and categorical colours for DecontX's preliminary population labels.
+It uses the qualitative **Dark 3** palette with stable cluster-to-colour mapping,
+rather than a sequential gradient, to make neighbouring cluster labels distinct.
 Baseline and retained panels share count scales and cluster colours; fits are
 faceted separately because a cluster label is local to its fit. These are not
 final clustering/cell-type annotations. Cluster membership itself is not an
