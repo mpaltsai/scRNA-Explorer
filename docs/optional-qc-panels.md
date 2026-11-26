@@ -42,6 +42,19 @@ accessions are not silently declared physical captures.
 4. Click **Run doublet check**. Inspect the distributions, relationships with
    UMIs/genes and predicted counts, with facets labelled **Provisional group**.
 
+The Doublets panel also includes **UMIs versus detected genes: doublet score**
+alongside the original three plots. Like the existing mitochondrial-coloured
+QC scatterplot, it uses log-scaled UMIs on x and detected genes on y. Point
+colour is the continuous baseline scDblFinder score, with a shared 0–1 colour
+scale and fixed count axes across baseline/retained facets and analysis groups.
+Higher scores are drawn last for visibility. This plot's two count axes stay
+fixed when the separate diagnostic-relationship selector changes. Plotting or
+changing a QC subset reuses the existing scores and does not rerun detection.
+The plot extension passed 145 targeted expectations, including score-to-cell
+alignment, log-count coordinates, shared facet/colour scales, pre-run validation
+and rendering in capture-informed and exploratory modes. A full UI render
+confirmed that all four plots remain inside the Doublets tab.
+
 Groups are scored separately within the selected sample's fixed baseline.
 Exploratory groups may mix or split physical captures. Use the broad available
 population before cell-type subsetting; small or unrepresentative populations
@@ -236,7 +249,7 @@ The plot renderer now checks readiness before entering plotting functions.
 With `SingleCellExperiment` attached, Bioconductor's S4 dispatch previously
 wrapped the normal "Review settings and run this optional check first" Shiny
 validation into an ordinary error when forcing lazy plotting arguments.
-The regression test opens all ten optional plots with that package attached,
+The regression test opens all optional plots with that package attached,
 before any check is requested. It requires ordinary Shiny validation and checks
 that no model runs, no filtering is applied and the baseline remains unchanged.
 Existing tests still exercise scored plots, stale settings and subset reuse.

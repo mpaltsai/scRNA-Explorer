@@ -16,7 +16,7 @@ testthat::test_that("unstarted optional plots keep Shiny validation with Biocond
       review,f$app_root,services=list(run=engine))
   }
   shiny::testServer(server,{
-    panels<-list(doublets=c("qcDoubletDistribution","qcDoubletJoint","qcDoubletCounts"),
+    panels<-list(doublets=c("qcDoubletDistribution","qcDoubletJoint","qcDoubletCounts","qcDoubletUmiGenes"),
       ambient=c("qcAmbientDistribution","qcAmbientJoint","qcAmbientPopulations","qcAmbientFit"),
       cell_cycle=c("qcCycleScores","qcCycleCounts","qcCycleQC"))
     for(method in names(panels)) {
@@ -72,6 +72,7 @@ testthat::test_that("optional doublet review preserves filtering state and inval
     testthat::expect_true(is.list(output$qcDoubletDistribution))
     testthat::expect_true(is.list(output$qcDoubletJoint))
     testthat::expect_true(is.list(output$qcDoubletCounts))
+    testthat::expect_true(is.list(output$qcDoubletUmiGenes))
     p<-diagnostics$prefix();do.call(session$setInputs,stats::setNames(list(2),paste0(p,"seed")))
     stale<-diagnostics$results("A")$doublets
     testthat::expect_identical(stale$status,"stale_settings")

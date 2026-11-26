@@ -28,6 +28,20 @@ qc_plot_doublet_joint <- function(d,x="nUMI") {
     ggplot2::theme_bw()+ggplot2::labs(x=paste("log10",if(x=="nUMI") "UMIs" else "detected genes"),y="scDblFinder score",color="Prediction")
 }
 
+qc_plot_doublet_umi_genes <- function(d) {
+  # Match the existing mitochondrial-coloured QC plot's log-count axes, using
+  # already joined baseline scores. Drawing high scores last keeps them visible.
+  d<-.qc_doublet_plot_groups(d)
+  d<-d[order(d$qc_diag_doublet_score),,drop=FALSE]
+  ggplot2::ggplot(d,ggplot2::aes(x=nUMI,y=nGene,color=qc_diag_doublet_score))+
+    ggplot2::geom_point(alpha=.7,size=1)+
+    ggplot2::scale_x_log10()+ggplot2::scale_y_log10()+
+    ggplot2::scale_colour_viridis_c(option="C",limits=c(0,1))+
+    ggplot2::facet_grid(qc_plot_group~stage,drop=FALSE)+ggplot2::theme_bw()+
+    ggplot2::labs(x="UMIs (log scale)",y="Detected genes (log scale)",color="Doublet score",
+      caption="Retained panels reuse baseline scores. Provisional analysis groups do not establish capture identity.")
+}
+
 qc_plot_doublet_counts <- function(d) {
   d<-.qc_doublet_plot_groups(d)
   counts<-as.data.frame(table(group=d$qc_plot_group,stage=d$stage,prediction=d$qc_diag_doublet_class))

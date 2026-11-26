@@ -114,7 +114,7 @@ testthat::test_that("the exploratory Shiny mode reuses groups and invalidates ch
     session$setInputs(qcRun_doublets=action(1));session$flushReact()
     testthat::expect_identical(diagnostics$results("A")$doublets$status,"scored")
     testthat::expect_true(all(is.na(diagnostics$cell_table()$qc_diag_capture)))
-    for(id in c("qcDoubletDistribution","qcDoubletJoint","qcDoubletCounts")) testthat::expect_true(is.list(output[[id]]))
+    for(id in c("qcDoubletDistribution","qcDoubletJoint","qcDoubletCounts","qcDoubletUmiGenes")) testthat::expect_true(is.list(output[[id]]))
     testthat::expect_equal(calls(),1L)
     cfg$provisional_group_mode<-"metadata";cfg$provisional_group_column<-"geo_accession"
     qc_diag_set_controls(session,diagnostics,"doublets",cfg)

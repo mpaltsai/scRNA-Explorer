@@ -184,6 +184,7 @@ qc_diagnostics_server <- function(input,output,session,baselines,review,app_root
   x_axis<-function() if(identical(input$qcOptionalX,"nGene")) "nGene" else "nUMI"
   plots<-list(qcDoubletDistribution=function() qc_plot_doublet_distribution(compared("doublets")),
     qcDoubletJoint=function() qc_plot_doublet_joint(compared("doublets"),x_axis()),qcDoubletCounts=function() qc_plot_doublet_counts(compared("doublets")),
+    qcDoubletUmiGenes=function() qc_plot_doublet_umi_genes(compared("doublets")),
     qcAmbientDistribution=function() qc_plot_ambient_distribution(compared("ambient")),qcAmbientJoint=function() qc_plot_ambient_joint(compared("ambient"),x_axis()),
     qcAmbientPopulations=function() qc_plot_ambient_populations(compared("ambient")),qcAmbientFit=function() {
       r<-fitted("ambient");tryCatch(qc_plot_ambient_fit(r),error=function(e) shiny::validate(shiny::need(FALSE,conditionMessage(e))))
