@@ -188,7 +188,15 @@ qc_diagnostics_server <- function(input,output,session,baselines,review,app_root
     },qcCycleScores=function() qc_plot_cycle_scores(compared("cell_cycle")),qcCycleCounts=function() qc_plot_cycle_counts(compared("cell_cycle")),qcCycleQC=function() qc_plot_cycle_qc(compared("cell_cycle")))
   for(id in names(plots)) local({
     name<-id;make<-plots[[id]];method<-if(grepl("Doublet",id)) "doublets" else if(grepl("Ambient",id)) "ambient" else "cell_cycle"
-    output[[name]]<-shiny::renderPlot({show(method);make()})
+    output[[name]]<-shiny::renderPlot({
+      show(method)
+      # Validate before passing lazy data arguments into plotting functions.
+      # With Bioconductor attached, S4 dispatch can wrap a validation raised
+      # while forcing those arguments into an ordinary error/console warning.
+      # This only checks existing evidence; it never starts a diagnostic run.
+      fitted(method)
+      make()
+    })
   })
   output$qcAmbientFits<-shiny::renderTable({qc_ambient_fit_table(fitted("ambient"))},rownames=FALSE)
   marker_review<-shiny::reactive({

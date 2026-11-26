@@ -182,3 +182,14 @@ source-file checksums and the five ordinary QC metrics matched their preserved
 inputs/historical CSV by cell identifier (floating-point tolerance `1e-12`).
 These checks establish software behavior on the tested inputs, not independent
 biological validation of the model estimates.
+
+### Startup validation fix, 26 November 2026
+
+The plot renderer now checks readiness before entering plotting functions.
+With `SingleCellExperiment` attached, Bioconductor's S4 dispatch previously
+wrapped the normal "Review settings and run this optional check first" Shiny
+validation into an ordinary error when forcing lazy plotting arguments.
+The regression test opens all ten optional plots with that package attached,
+before any check is requested. It requires ordinary Shiny validation and checks
+that no model runs, no filtering is applied and the baseline remains unchanged.
+Existing tests still exercise scored plots, stale settings and subset reuse.

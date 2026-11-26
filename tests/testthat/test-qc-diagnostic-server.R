@@ -1,5 +1,39 @@
 qc_diag_action<-function(n) structure(as.integer(n),class="shinyActionButtonValue")
 
+testthat::test_that("unstarted optional plots keep Shiny validation with Bioconductor packages attached", {
+  # The app attaches SingleCellExperiment. Its S4 generics can wrap a validation
+  # condition raised while forcing a plotting argument into an ordinary error.
+  # Namespace-only fixtures miss that difference in the app's search path.
+  suppressPackageStartupMessages(withr::local_package("SingleCellExperiment"))
+  f<-qc_diag_fixture();on.exit(unlink(f$root,recursive=TRUE))
+  before<-digest::digest(f$baseline)
+  server<-function(input,output,session) {
+    calls<-shiny::reactiveVal(0L)
+    engine<-function(...) {calls(calls()+1L);stop("Opening a panel must not run a model.")}
+    review<-qc_review_server(input,output,session,function() list(A=f$baseline),
+      optional_results=function(n) diagnostics$results(n))
+    diagnostics<-qc_diagnostics_server(input,output,session,function() list(A=f$baseline),
+      review,f$app_root,services=list(run=engine))
+  }
+  shiny::testServer(server,{
+    panels<-list(doublets=c("qcDoubletDistribution","qcDoubletJoint","qcDoubletCounts"),
+      ambient=c("qcAmbientDistribution","qcAmbientJoint","qcAmbientPopulations","qcAmbientFit"),
+      cell_cycle=c("qcCycleScores","qcCycleCounts","qcCycleQC"))
+    for(method in names(panels)) {
+      session$setInputs(selectSample="A",qcReviewTab="optional",qcOptionalTab=method)
+      for(id in panels[[method]]) {
+        condition<-tryCatch({output[[id]];NULL},error=identity)
+        testthat::expect_true(inherits(condition,"shiny.silent.error"),info=id)
+        testthat::expect_match(conditionMessage(condition),"Review settings and run this optional check first.",fixed=TRUE,info=id)
+      }
+    }
+    testthat::expect_equal(calls(),0L)
+    testthat::expect_length(diagnostics$results("A"),0L)
+    testthat::expect_null(review$filtered()$A)
+    testthat::expect_identical(digest::digest(f$baseline),before)
+  })
+})
+
 testthat::test_that("optional doublet review preserves filtering state and invalidates changed or shared-capture evidence", {
   f<-qc_diag_fixture();on.exit(unlink(f$root,recursive=TRUE))
   b2<-f$baseline;b2$qc_sample<-rep("B",ncol(b2));b2$qc_cell_id<-paste0("B::",colnames(b2))
