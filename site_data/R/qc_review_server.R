@@ -144,7 +144,12 @@ qc_review_server <- function(input,output,session,baselines,optional_results=fun
     m<-baseline_metrics();shiny::req(length(m)>0)
     qc_plot_overview(do.call(rbind,m))
   })
-  output$qcSelectedOverview <- shiny::renderPlot({visible("overview");qc_plot_overview(comparison(),compare=TRUE)})
+  # Force comparison readiness before handing data to plotting helpers. With
+  # Bioconductor attached, S4 dispatch can otherwise wrap a missing-baseline
+  # Shiny condition raised inside a lazy plot argument into an ordinary error.
+  output$qcSelectedOverview <- shiny::renderPlot({
+    visible("overview");m<-comparison();qc_plot_overview(m,compare=TRUE)
+  })
   joint <- shiny::reactive(qc_joint_plot_data(comparison(),if(is.null(input$qcJointX)) "nGene" else input$qcJointX))
   output$qcJointPlot <- shiny::renderPlot({visible("joint");qc_plot_joint(joint(),
     if(is.null(selection())) NULL else selection()$thresholds,if(is.null(input$qcJointX)) "nGene" else input$qcJointX)})
@@ -153,9 +158,13 @@ qc_review_server <- function(input,output,session,baselines,optional_results=fun
     d<-shiny::nearPoints(joint(),input$qcJointHover,xvar="qc_x",yvar="qc_y",maxpoints=5,threshold=10)
     d[,c("cell_id","cells","sample","nUMI","nGene","mitoRatio","selection","reasons"),drop=FALSE]
   },rownames=FALSE)
-  output$qcRibosomalPlot <- shiny::renderPlot({visible("ribosomal");qc_plot_ribosomal(comparison())})
+  output$qcRibosomalPlot <- shiny::renderPlot({
+    visible("ribosomal");m<-comparison();qc_plot_ribosomal(m)
+  })
   output$qcRibosomalCoverage <- shiny::renderTable({e<-current();shiny::req(e);qc_ribosomal_coverage(e$metrics)},rownames=FALSE)
-  output$qcAnnotationCoverage <- shiny::renderPlot({visible("annotation");qc_plot_annotation_coverage(comparison())})
+  output$qcAnnotationCoverage <- shiny::renderPlot({
+    visible("annotation");m<-comparison();qc_plot_annotation_coverage(m)
+  })
   output$qcRuleCounts <- shiny::renderTable({p<-selection();shiny::req(p);p$rule_counts},rownames=FALSE)
   output$qcRuleImpact <- shiny::renderPlot({visible("impact");p<-selection();shiny::req(p);qc_plot_rule_impact(p)})
   output$qcRuleOverlap <- shiny::renderPlot({

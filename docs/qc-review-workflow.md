@@ -8,8 +8,9 @@ contain additional expression objects.
 
 ## Try the development app
 
-Restart the development app after editing; use the isolated worktree, not the
-original checkout:
+Use a fresh R session when retesting changes so previously loaded helper
+functions are replaced. Run the isolated worktree's app, not the original
+checkout:
 
 ```r
 shiny::runApp("/home/ismini/Documents/RNA_cor/iRNA/scRNA_Explorer_gitHub/scRNA-Explorer-shiny-input-integration/site_data")
@@ -198,3 +199,24 @@ commit, so that commit can be undone with `git revert <fix-commit>` while
 retaining the checkpoint. No push is required. User-owned decision-runner edits
 and diagnostic scripts are kept outside these commits; no dataset or expression
 checkpoint is included in them.
+
+## Startup readiness fix, 26 November 2026
+
+The selected-sample overview, ribosomal-fraction and annotation-coverage
+renderers now evaluate their comparison data before invoking plot helpers.
+This preserves Shiny's silent readiness condition when no baseline exists,
+including after an import/annotation change invalidates an earlier baseline.
+Previously, Bioconductor S4 dispatch could wrap that condition into an ordinary
+`do.call` error while forcing a lazy plotting argument. The optional panels
+already have their separate readiness guard.
+
+`test-qc-review-readiness.R` attaches `SingleCellExperiment` as the app does and
+checks startup, baseline creation, baseline removal and restoration. Missing
+baselines must yield silent Shiny conditions; available baselines must produce
+images. The test also checks that no filtering decision is applied and the
+baseline is unchanged. No QC thresholds, metric definitions or counts change.
+
+Validation: 203 expectations passed across the QC review, readiness and optional
+panel-server tests, with no failures, errors or skips. A separate no-baseline
+check exercised all 20 standard QC plot outputs with `SingleCellExperiment`
+attached; each preserved an ordinary Shiny readiness condition.
