@@ -193,3 +193,24 @@ The regression test opens all ten optional plots with that package attached,
 before any check is requested. It requires ordinary Shiny validation and checks
 that no model runs, no filtering is applied and the baseline remains unchanged.
 Existing tests still exercise scored plots, stale settings and subset reuse.
+
+### Deferred-check cleanup fix, 26 November 2026
+
+Missing capture/rate information leaves the doublet check `not_assessed`, with
+unavailable scores and an explanatory message. The deferred callback now resets
+its busy state inside a separate `isolate()`: its exit handler runs after the
+main isolated body has returned. Reading reactive state there without its own
+context previously caused a fatal error, even after a message was prepared.
+
+`test-qc-diagnostic-callbacks.R` replays the controller's actual deferred callback
+with a session domain but no reactive consumer, matching the real app. The
+standard Shiny mock normally supplies isolation and masked this failure.
+The test checks missing captures, missing rates, a simulated runner failure,
+successful retry after correction and marker-only review's early return. It
+requires cleared busy state and an open session, preserves baseline counts and
+never applies filtering. Its model-fitting seam is synthetic; it does not
+assign real capture identities or validate biological doublet predictions.
+
+Validation: all 174 optional-QC expectations passed, with no failures, errors
+or skips, including 36 callback-lifecycle checks. The callback test reproduced
+the reported reactive-context/`setdiff` crash before the cleanup fix.

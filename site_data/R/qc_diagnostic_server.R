@@ -151,7 +151,9 @@ qc_diagnostics_server <- function(input,output,session,baselines,review,app_root
     key<-paste(n,method,sep="|");if(key %in% busy()) return()
     busy(c(busy(),key));notice(paste("Preparing",method,"on the fixed baseline. No filtering or count correction will be applied."))
     session$onFlushed(function() shiny::isolate({
-      on.exit(busy(setdiff(busy(),key)),add=TRUE)
+      # on.exit runs after this isolate has unwound. Establish its own context
+      # for reading busy(), including validation failures and early returns.
+      on.exit(shiny::isolate(busy(setdiff(busy(),key))),add=TRUE)
       if(session$isClosed() || !identical(baseline_ids()[[n]],hash)) return(invisible(NULL))
       tryCatch({
         if(method=="cell_cycle") {
