@@ -10,10 +10,43 @@ the matching rows of the baseline scores by stable cell ID. They do not refit a
 model on each proposed subset. If only baseline is shown, select/prepare a
 current preview or switch the comparison to the last applied result.
 
-No optional score automatically excludes a cell, regresses out a signal or
-selects corrected counts. The existing nine threshold rules still control
-filtering. Model parameters, seed, reference identity, software versions,
-warnings and status are recorded separately from a filtering acceptance.
+Running a check does not itself exclude cells, regress out a signal or select
+corrected counts. Filtering uses the existing nine rules plus any explicitly
+enabled optional exclusions described below. Model settings and evidence remain
+separate from the user's acceptance of a filtering decision.
+
+## Optional exclusions and QC layout
+
+**Overview** stays first, with **QC plots** immediately beside it. The **Cells
+and decisions** tab is removed; per-cell metrics/reasons and decision histories
+remain downloadable from the sidebar, and Optional checks still has its
+per-cell evidence table.
+
+In the sidebar, **Optional diagnostic exclusions** defaults to off:
+
+- Choose **Exclude cells predicted as doublets**, or **Exclude scores above my
+  maximum** and enter a maximum retained doublet score.
+- Enable ambient exclusion and enter a maximum retained DecontX fraction (0–1).
+  There is no preselected scientific cutoff. A cell exactly at a maximum stays.
+- Click **Preview filtering**, review combined retained/excluded counts and rule
+  overlaps, then **Apply preview to this sample** with a reason if accepted.
+
+These rules use the current baseline diagnostic results, including explicitly
+exploratory results if the user selects them. Missing, stale, incomplete,
+mismatched or nonfinite evidence blocks only an enabled optional rule; it is
+never converted into zero contamination or a singlet classification. Disabling
+optional rules restores the original nine-rule workflow without requiring a
+model fit. Cell-cycle phase and preliminary cluster membership are not exclusion
+rules. Overlapping failures exclude a cell once and preserve every reason.
+
+Changing a selected cutoff or rerunning an enabled check invalidates the preview.
+The last applied SCE remains intact until a new preview is applied. Applying
+rechecks rules, cell-ID alignment, baseline identity, run IDs and used-value
+hashes against current evidence. Each decision records selected rules, model
+settings/provenance and the actual per-cell scores or labels used (`*_used`
+fields), so later reruns or refreshed diagnostic exports do not rewrite the
+accepted evidence. No expression checkpoint is added. Sensitivity varies the
+nine standard cutoffs while holding the snapshot's optional-exclusion mask fixed.
 
 ## Doublets
 
@@ -122,6 +155,13 @@ information and the reported likelihood history when available. Fit groups are
 kept separate. Warnings and iteration-limit indicators remain visible; stopping
 does not establish model validity or independent contamination truth.
 
+**UMIs versus detected genes: preliminary ambient-RNA clusters** uses log-scaled
+count axes and categorical colours for DecontX's preliminary population labels.
+Baseline and retained panels share count scales and cluster colours; fits are
+faceted separately because a cluster label is local to its fit. These are not
+final clustering/cell-type annotations. Cluster membership itself is not an
+exclusion rule: the optional ambient rule uses each cell's estimated fraction.
+
 Without background droplets, a fit with fewer than two preliminary populations
 is unavailable evidence rather than a zero-contamination result. The method is
 population-dependent even when it returns numeric estimates. Original counts
@@ -185,9 +225,10 @@ deciding on regression remain later analysis decisions.
 - Baseline/applied SCE downloads receive `qc_diag_*` fields and reference/method
   evidence under `metadata(object)$scrna_explorer_qc$optional_diagnostics`.
   Applying filtering records the optional evidence IDs/status available at that
-  decision and attaches those scores without using them as extra exclusion
-  rules. Later diagnostic runs can refresh exported metadata while preserving
-  the applied filtering revision. Existing foreign metadata/assays and counts
+  decision and attaches current scores. Selected optional rules additionally
+  retain their decision-time values and references in the filtering history.
+  Later diagnostic runs can refresh current exported diagnostics while preserving
+  the applied filtering revision and its immutable `*_used` values. Foreign metadata/assays and counts
   are preserved; an unrecognised reserved-field collision stops decoration.
 - Latest compatible diagnostics are attached to normalization inputs. The
   existing Seurat conversion/integration helpers still require their planned

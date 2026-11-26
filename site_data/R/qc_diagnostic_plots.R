@@ -18,7 +18,7 @@ qc_diagnostic_comparison <- function(comparison,result) {
 qc_plot_doublet_distribution <- function(d) ggplot2::ggplot(.qc_doublet_plot_groups(d),ggplot2::aes(x=qc_diag_doublet_score,fill=qc_diag_doublet_class))+
   ggplot2::geom_histogram(bins=30,position="identity",alpha=.6)+ggplot2::facet_grid(qc_plot_group~stage,drop=FALSE)+
   ggplot2::theme_bw()+ggplot2::labs(x="scDblFinder score",y="Cells",fill="Prediction",
-    caption="Groups are scored separately. Exploratory groups are provisional, with unknown capture identity. Predictions do not remove cells.")
+    caption="Groups are scored separately; exploratory groups remain provisional. Checks alone do not filter: selected exclusion rules require Preview/Apply.")
 
 qc_plot_doublet_joint <- function(d,x="nUMI") {
   d<-.qc_doublet_plot_groups(d)
@@ -60,6 +60,18 @@ qc_plot_ambient_joint <- function(d,x="nUMI") {
   ggplot2::ggplot(d,ggplot2::aes(x=diagnostic_x,y=100*qc_diag_ambient_fraction,color=qc_diag_ambient_population))+
     ggplot2::geom_point(alpha=.6,size=1)+ggplot2::facet_grid(qc_diag_ambient_fit_group~stage,drop=FALSE)+ggplot2::theme_bw()+
     ggplot2::labs(x=paste("log10",if(x=="nUMI") "UMIs" else "detected genes"),y="Estimated contamination (%)",color="Preliminary population")
+}
+
+qc_plot_ambient_umi_genes_clusters <- function(d) {
+  # These labels are DecontX's preliminary populations within each fit, not
+  # downstream biological annotations. Retained panels reuse baseline labels.
+  d$ambient_plot_cluster<-factor(d$qc_diag_ambient_population,levels=unique(d$qc_diag_ambient_population))
+  ggplot2::ggplot(d,ggplot2::aes(x=nUMI,y=nGene,color=ambient_plot_cluster))+
+    ggplot2::geom_point(alpha=.7,size=1)+ggplot2::scale_x_log10()+ggplot2::scale_y_log10()+
+    ggplot2::scale_colour_viridis_d(drop=FALSE)+
+    ggplot2::facet_grid(qc_diag_ambient_fit_group~stage,drop=FALSE)+ggplot2::theme_bw()+
+    ggplot2::labs(x="UMIs (log scale)",y="Detected genes (log scale)",color="Preliminary cluster",
+      caption="Colours identify preliminary DecontX clusters within each fit, not contamination levels or final cell types. No entire cluster is excluded automatically.")
 }
 
 qc_plot_ambient_populations <- function(d) ggplot2::ggplot(d,ggplot2::aes(x=qc_diag_ambient_population,y=100*qc_diag_ambient_fraction))+

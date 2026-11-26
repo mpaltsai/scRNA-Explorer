@@ -1,0 +1,12 @@
+testthat::test_that("QC plots follow Overview and cell/decision downloads survive the removed tab", {
+  testthat::skip_if_not_installed("xml2")
+  e<-new.env(parent=asNamespace("shiny"))
+  sys.source(file.path("..","..","site_data","tab_2dev.R"),envir=e)
+  d<-xml2::read_html(htmltools::renderTags(e$tab2)$html)
+  labels<-xml2::xml_text(xml2::xml_find_all(d,'//ul[@id="qcReviewTab"]/li/a'))
+  testthat::expect_identical(labels[1:2],c("Overview","QC plots"))
+  testthat::expect_false(any(labels %in% c("Cells and decisions","Existing QC plots")))
+  for(id in c("qcCellsDownload","qcDecisionsDownload","qcOptionalFilterControls"))
+    testthat::expect_length(xml2::xml_find_all(d,paste0('//*[@id="',id,'"]')),1L)
+  testthat::expect_length(xml2::xml_find_all(d,'//*[@id="qcAmbientUmiGenesClusters"]/ancestor::*[@data-value="ambient"]'),1L)
+})

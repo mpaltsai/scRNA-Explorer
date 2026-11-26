@@ -13,7 +13,7 @@ qc_review_server <- function(input,output,session,baselines,optional_results=fun
       fresh[[name]] <- if (!is.null(prior) && identical(prior$baseline_hash,hash)) prior else list(
         baseline_hash=hash,metrics=qc_review_metrics(b[[name]]),
         draft=if(ncol(b[[name]])) qc_default_thresholds(baseline_qc_metrics(b[[name]])) else NULL,
-        preview=NULL,filtered=NULL,applied=NULL,history=list(),message="Preview thresholds before applying filtering.")
+        optional_rules=qc_optional_filter_defaults(),preview=NULL,filtered=NULL,applied=NULL,history=list(),message="Preview thresholds before applying filtering.")
     }
     entries(fresh);baseline_metrics(lapply(fresh,`[[`,"metrics"));generation(shiny::isolate(generation())+1L)
     choices <- names(fresh)[vapply(fresh,function(e) nrow(e$metrics)>0L,logical(1))]
@@ -30,8 +30,9 @@ qc_review_server <- function(input,output,session,baselines,optional_results=fun
   control_ids <- shiny::reactive({
     name <- selected();if(is.null(name)) return(NULL)
     prefix <- paste0("qc_",generation(),"_",match(name,names(baselines())),"_")
-    stats::setNames(paste0(prefix,c(qc_rule_spec()$input,"nUMIs","nGenes","mitoRatio","rbcRatio","novelty")),
-      c(qc_rule_spec()$input,"nUMIs","nGenes","mitoRatio","rbcRatio","novelty"))
+    fields<-c(qc_rule_spec()$input,"nUMIs","nGenes","mitoRatio","rbcRatio","novelty",
+      "doubletRule","doubletMaxScore","ambientExclude","ambientMaxFraction")
+    stats::setNames(paste0(prefix,fields),fields)
   })
   draft <- shiny::reactive({
     ids <- control_ids();if(is.null(ids)) return(NULL)
@@ -44,6 +45,45 @@ qc_review_server <- function(input,output,session,baselines,optional_results=fun
     e <- shiny::isolate(entries())
     if (!identical(e[[n]]$draft,d)) {e[[n]]$draft<-d;entries(e)}
   },ignoreNULL=TRUE)
+  optional_draft<-shiny::reactive({
+    ids<-control_ids();e<-current();if(is.null(ids) || is.null(e)) return(qc_optional_filter_defaults())
+    saved<-e$optional_rules;if(is.null(saved)) saved<-qc_optional_filter_defaults()
+    value<-function(id,default,empty=default) {
+      key<-ids[[id]];x<-input[[key]]
+      # An unbound control can restore its sample's draft; a bound numeric
+      # control deliberately cleared by the user must not reuse an old cutoff.
+      if(is.null(x)) {if(key %in% names(input)) empty else default} else x
+    }
+    list(doublets=value("doubletRule",saved$doublets),doublet_score=value("doubletMaxScore",saved$doublet_score,NA_real_),
+      ambient=value("ambientExclude",saved$ambient),ambient_fraction=value("ambientMaxFraction",saved$ambient_fraction,NA_real_))
+  })
+  shiny::observeEvent(optional_draft(),{
+    n<-selected();if(is.null(n)) return();d<-optional_draft();e<-shiny::isolate(entries())
+    if(!identical(e[[n]]$optional_rules,d)) {e[[n]]$optional_rules<-d;entries(e)}
+  },ignoreNULL=TRUE)
+  optional_state<-shiny::reactive({
+    e<-current();shiny::req(e);rules<-qc_validate_optional_filters(optional_draft())
+    results<-if(qc_optional_filters_enabled(rules)) optional_results(selected()) else list()
+    qc_optional_filter_state(e$metrics,rules,results,e$baseline_hash)
+  })
+  output$qcOptionalFilterControls<-shiny::renderUI({
+    ids<-control_ids();if(is.null(ids)) return(NULL)
+    d<-shiny::isolate(optional_draft())
+    shiny::tagList(shiny::h4("Optional diagnostic exclusions"),
+      shiny::helpText("Off by default. Use reviewed predictions/estimates only if you choose. Current results are required; exploratory findings remain provisional. Preview first; Apply records your choice."),
+      shiny::selectInput(ids[["doubletRule"]],"Doublet exclusion rule",c("Do not exclude using doublets"="none","Exclude cells predicted as doublets"="prediction","Exclude scores above my maximum"="score"),selected=d$doublets),
+      shiny::conditionalPanel(condition=paste0("input['",ids[["doubletRule"]],"'] === 'score'"),
+        shiny::numericInput(ids[["doubletMaxScore"]],"Maximum retained doublet score",value=d$doublet_score,min=0,max=1,step=.01)),
+      shiny::checkboxInput(ids[["ambientExclude"]],"Exclude cells above my maximum estimated ambient fraction",value=d$ambient),
+      shiny::conditionalPanel(condition=paste0("input['",ids[["ambientExclude"]],"'] === true"),
+        shiny::numericInput(ids[["ambientMaxFraction"]],"Maximum retained ambient fraction (0–1)",value=d$ambient_fraction,min=0,max=1,step=.01)),
+      shiny::helpText("A cell failing any enabled rule is excluded; overlaps count once. Cells exactly at a numeric maximum remain. Preliminary cluster membership and cell-cycle phase alone never exclude cells."))
+  })
+  output$qcOptionalFilterNotice<-shiny::renderText({
+    if(is.null(current())) return("")
+    tryCatch({s<-optional_state();if(qc_optional_filters_enabled(s$rules)) "Optional exclusions are available for Preview. Only Apply changes the filtered data." else "Optional diagnostic exclusions are off in the current draft."},
+      error=function(e) conditionMessage(e))
+  })
   output$qcReviewControls <- shiny::renderUI({
     ids <- control_ids();if(is.null(ids)) return(shiny::helpText("Create an annotated QC baseline first."))
     e <- shiny::isolate(current()); d <- e$draft;m <- e$metrics
@@ -77,6 +117,8 @@ qc_review_server <- function(input,output,session,baselines,optional_results=fun
     if(is.null(e) || is.null(e$preview) || is.null(d)) return(NULL)
     valid <- tryCatch(qc_validate_thresholds(d),error=function(e) NULL)
     if (!identical(valid,e$preview$thresholds) || !identical(e$baseline_hash,e$preview$baseline_hash)) return(NULL)
+    s<-tryCatch(optional_state(),error=function(e) NULL)
+    if(is.null(s) || !identical(s$rules,e$preview$optional_rules) || !identical(s$evidence,e$preview$optional_evidence)) return(NULL)
     e$preview
   })
   # A browser can deliver Preview, Apply and plot clicks in one input batch.
@@ -88,7 +130,9 @@ qc_review_server <- function(input,output,session,baselines,optional_results=fun
     e <- shiny::isolate(entries())
     tryCatch({
       if(is.null(draft())) stop("Complete the current sample's numeric controls first.")
-      e[[n]]$preview <- qc_filter_proposal(e[[n]]$metrics,draft(),e[[n]]$baseline_hash)
+      rules<-qc_validate_optional_filters(optional_draft())
+      evidence<-if(qc_optional_filters_enabled(rules)) optional_results(n) else list()
+      e[[n]]$preview <- qc_filter_proposal(e[[n]]$metrics,draft(),e[[n]]$baseline_hash,rules,evidence)
       e[[n]]$message <- "Preview ready. No filtering has been applied by this action."
     },error=function(err) {e[[n]]$preview<<-NULL;e[[n]]$message<<-paste("Preview stopped:",conditionMessage(err))})
     entries(e)
@@ -100,7 +144,7 @@ qc_review_server <- function(input,output,session,baselines,optional_results=fun
       p <- preview();if(is.null(p)) stop("Preview the current thresholds for this sample before applying.")
       evidence<-optional_results(n)
       ids<-lapply(evidence,function(r) r[c("method","status","revision","baseline_hash")])
-      result <- qc_apply_filter(baselines()[[n]],p,input$qcApplyReason,e[[n]]$history,optional_evidence=ids)
+      result <- qc_apply_filter(baselines()[[n]],p,input$qcApplyReason,e[[n]]$history,optional_evidence=ids,optional_results=evidence)
       if(length(evidence)) result$object<-qc_attach_optional(result$object,evidence,e[[n]]$baseline_hash)
       e[[n]]$filtered <- result$object;e[[n]]$applied<-result$decision;e[[n]]$history<-result$history
       e[[n]]$message <- paste("Applied",sum(p$keep),"of",length(p$keep),"baseline cells. This sample's plots, download and downstream input use the recorded revision.")
@@ -113,7 +157,8 @@ qc_review_server <- function(input,output,session,baselines,optional_results=fun
     if(is.null(e$applied)) return(NULL)
     p <- e$applied
     list(keep=p$per_cell$decision=="retain",per_cell=p$per_cell,thresholds=p$thresholds,
-      summary=p$summary,rule_counts=p$rule_counts,overlap=p$overlap)
+      summary=p$summary,rule_counts=p$rule_counts,overlap=p$overlap,
+      optional_keep=if(is.null(p$optional_keep)) rep(TRUE,nrow(e$metrics)) else p$optional_keep)
   })
   comparison <- shiny::reactive({
     e <- current();shiny::req(e)
@@ -124,7 +169,7 @@ qc_review_server <- function(input,output,session,baselines,optional_results=fun
     e <- current();if(is.null(e)) return("Create an annotated QC baseline, then select a sample.")
     p <- selection()
     paste(selected(),"—",nrow(e$metrics),"baseline cells.",
-      if(is.null(p)) "No current selection for this view; only baseline is shown. Preview again after editing cutoffs." else
+      if(is.null(p)) "No current selection for this view; only baseline is shown. Preview again after editing rules or changing enabled diagnostic results." else
         paste(if(identical(input$qcView,"applied")) "Applied:" else "Preview:",sum(p$keep),"retained;",sum(!p$keep),"excluded."),
       if(is.null(e$applied)) "No applied filtering decision." else paste("Stored applied revision:",substr(e$applied$revision,1,12),".",ncol(e$filtered),"cells."))
   })
@@ -174,7 +219,7 @@ qc_review_server <- function(input,output,session,baselines,optional_results=fun
   })
   sensitivity <- shiny::reactive({
     p<-selection();e<-current();shiny::req(p,e)
-    d<-qc_threshold_sensitivity(e$metrics,p$thresholds)
+    d<-qc_threshold_sensitivity(e$metrics,p$thresholds,optional_keep=p$optional_keep)
     d$view<-if(identical(input$qcView,"applied")) "applied" else "preview"
     d$baseline_hash<-e$baseline_hash
     d$selection_id<-if(identical(input$qcView,"applied")) e$applied$revision else p$proposal_id
@@ -185,6 +230,7 @@ qc_review_server <- function(input,output,session,baselines,optional_results=fun
     e<-current();shiny::req(e);p<-selection();d<-e$metrics
     d$decision<-if(is.null(p)) "not previewed" else ifelse(p$keep,"retain",if(identical(input$qcView,"applied")) "excluded (applied)" else "proposed exclusion")
     d$reasons<-if(is.null(p)) "" else p$per_cell$reasons
+    if(!is.null(p)) for(field in grep("^qc_diag_.*_used$",names(p$per_cell),value=TRUE)) d[[field]]<-p$per_cell[[field]]
     d
   })
   output$qcCells <- DT::renderDT(DT::datatable(cell_table(),rownames=FALSE,options=list(scrollX=TRUE,pageLength=10),selection="single"))
@@ -253,7 +299,7 @@ qc_review_server <- function(input,output,session,baselines,optional_results=fun
   revisions <- shiny::reactive(vapply(entries(),function(e) if(is.null(e$applied)) "" else e$applied$revision,character(1)))
   list(selected=selected,metrics=shiny::reactive({e<-current();if(is.null(e)) NULL else e$metrics}),
     baseline_ids=shiny::reactive(vapply(entries(),`[[`,character(1),"baseline_hash")),
-    draft=draft,preview=preview,selection=selection,comparison=comparison,sensitivity=sensitivity,control_ids=control_ids,
+    draft=draft,optional_draft=optional_draft,preview=preview,selection=selection,comparison=comparison,sensitivity=sensitivity,control_ids=control_ids,
     filtered=filtered,revisions=revisions,history=shiny::reactive(lapply(entries(),`[[`,"history")),
     require_ready=shiny::reactive(qc_require_applied(baselines(),filtered())))
 }

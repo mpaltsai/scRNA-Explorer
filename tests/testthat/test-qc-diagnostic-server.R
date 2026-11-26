@@ -17,7 +17,7 @@ testthat::test_that("unstarted optional plots keep Shiny validation with Biocond
   }
   shiny::testServer(server,{
     panels<-list(doublets=c("qcDoubletDistribution","qcDoubletJoint","qcDoubletCounts","qcDoubletUmiGenes"),
-      ambient=c("qcAmbientDistribution","qcAmbientJoint","qcAmbientPopulations","qcAmbientFit"),
+      ambient=c("qcAmbientDistribution","qcAmbientJoint","qcAmbientPopulations","qcAmbientFit","qcAmbientUmiGenesClusters"),
       cell_cycle=c("qcCycleScores","qcCycleCounts","qcCycleQC"))
     for(method in names(panels)) {
       session$setInputs(selectSample="A",qcReviewTab="optional",qcOptionalTab=method)
@@ -142,6 +142,7 @@ testthat::test_that("ambient and cycle panels keep fit provenance and compare su
     testthat::expect_true(is.list(output$qcAmbientDistribution))
     testthat::expect_true(is.list(output$qcAmbientJoint))
     testthat::expect_true(is.list(output$qcAmbientPopulations))
+    testthat::expect_true(is.list(output$qcAmbientUmiGenesClusters))
     testthat::expect_true(is.list(output$qcAmbientFit))
     session$setInputs(qcOptionalTab="cell_cycle")
     testthat::expect_true(is.list(output$qcCycleScores))

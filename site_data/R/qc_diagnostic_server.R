@@ -186,6 +186,7 @@ qc_diagnostics_server <- function(input,output,session,baselines,review,app_root
     qcDoubletJoint=function() qc_plot_doublet_joint(compared("doublets"),x_axis()),qcDoubletCounts=function() qc_plot_doublet_counts(compared("doublets")),
     qcDoubletUmiGenes=function() qc_plot_doublet_umi_genes(compared("doublets")),
     qcAmbientDistribution=function() qc_plot_ambient_distribution(compared("ambient")),qcAmbientJoint=function() qc_plot_ambient_joint(compared("ambient"),x_axis()),
+    qcAmbientUmiGenesClusters=function() qc_plot_ambient_umi_genes_clusters(compared("ambient")),
     qcAmbientPopulations=function() qc_plot_ambient_populations(compared("ambient")),qcAmbientFit=function() {
       r<-fitted("ambient");tryCatch(qc_plot_ambient_fit(r),error=function(e) shiny::validate(shiny::need(FALSE,conditionMessage(e))))
     },qcCycleScores=function() qc_plot_cycle_scores(compared("cell_cycle")),qcCycleCounts=function() qc_plot_cycle_counts(compared("cell_cycle")),qcCycleQC=function() qc_plot_cycle_qc(compared("cell_cycle")))
@@ -217,6 +218,7 @@ qc_diagnostics_server <- function(input,output,session,baselines,review,app_root
     d$qc_selection<-if(is.null(chosen)) "baseline only" else ifelse(chosen$keep,"retained",
       if(identical(input$qcView,"applied")) "excluded (applied)" else "proposed exclusion")
     d$qc_filtering_reasons<-if(is.null(chosen)) "" else chosen$per_cell$reasons
+    if(!is.null(chosen)) for(field in grep("^qc_diag_.*_used$",names(chosen$per_cell),value=TRUE)) d[[field]]<-chosen$per_cell[[field]]
     for(m in names(r)) {
       i<-match(d$cell_id,r[[m]]$values$cell_id);if(anyNA(i)) stop("Diagnostic cell identifiers differ from baseline.")
       for(field in setdiff(names(r[[m]]$values),c("cell_id","cells"))) d[[field]]<-r[[m]]$values[[field]][i]

@@ -22,7 +22,7 @@ shiny::runApp("/home/ismini/Documents/RNA_cor/iRNA/scRNA_Explorer_gitHub/scRNA-E
 2. Open **Quality Control Plots** and select a sample. Metrics are available
    automatically for the selected baseline; separate create/recompute/redraw
    button sequences are no longer required.
-3. Review **Overview**, **Joint metrics**, **Ribosomal fractions** and
+3. Review **Overview**, **QC plots**, **Joint metrics**, **Ribosomal fractions** and
    **Annotation coverage**. The overview includes other baseline samples for
    comparison, but filtering settings remain per sample.
 4. Edit numeric draft cutoffs. The initial settings retain all baseline cells
@@ -31,7 +31,7 @@ shiny::runApp("/home/ismini/Documents/RNA_cor/iRNA/scRNA_Explorer_gitHub/scRNA-E
    original app, explicitly copy their values into the numeric draft. Exact
    numeric cutoffs are not silently rounded to slider precision.
 5. Click **Preview filtering**. Inspect retained/excluded counts, **Filtering
-   impact**, rule overlaps, **Sensitivity** and the per-cell reasons table.
+   impact**, rule overlaps, **Sensitivity** and the downloadable per-cell reasons.
    Hover over joint-metric points to inspect stable cell IDs. A preview changes
    tables/masks/plots only; the applied SCE and its download remain unchanged.
 6. Give a reason and click **Apply preview to this sample**. Apply verifies the
@@ -83,13 +83,13 @@ clears affected QC state through the existing input/annotation lifecycle.
 - Filtering impact: per-rule failures can overlap. Exact rule combinations count
   each excluded cell once; the graph shows the top 15 combinations and the cell
   export retains all reasons. Zero exclusions remains a valid preview.
-- Sensitivity: one cutoff varies while the other eight stay fixed at the
+- Sensitivity: one cutoff varies while the other eight and any selected optional-exclusion mask stay fixed at the
   selected preview/applied snapshot. The export records the mode, baseline hash
   and selection/revision ID. Fraction
   cutoff axes use 0–1, while retained-cell proportions use percent. This measures
   sensitivity to settings, not classification accuracy or optimality.
-- Existing QC plots: the original plotting functions remain available in their
-  own panel. Baseline/retained facets use common scales. Library composition and
+- QC plots: the original plotting functions remain available immediately beside
+  Overview. Baseline/retained facets use common scales. Library composition and
   highly expressed gene plots run on request; retained expression plots use the
   applied SCE. A sample/revision change clears an incompatible expression view.
 
@@ -119,8 +119,19 @@ reduced-evidence filter requires a separate explicit design and validation.
 
 Doublet, ambient-RNA and cell-cycle controls/plots are now available under
 **Optional checks** inside this QC tab; see [their workflow](optional-qc-panels.md).
-They are not used to exclude cells by this controller. Model-based threshold
-suggestions remain a later integration step.
+They do not filter by themselves. Users can explicitly select optional doublet
+or ambient exclusion rules, preview their effects and apply them with a reason.
+Model-based threshold suggestions remain a later integration step.
+
+The optional-exclusion extension passed 1,031 full-suite expectations, with no
+failures, errors or skips. A real 595-cell pilot preview combined predicted
+doublets and an estimated ambient-fraction maximum, verified the mask by cell
+ID and rendered the new ambient cluster-coloured UMI/gene plot. The numerical
+cutoff was a technical test value, not a recommendation. No pilot filtering
+decision was applied or saved; source counts, baseline and file checksum stayed
+unchanged. Synthetic tests exercise actual Apply, overlaps, threshold boundaries,
+unavailable/stale/mismatched evidence, per-sample isolation, cleared active
+cutoffs and immutable history.
 Top-gene concentration extensions and a full analysis-bundle restore workflow
 are also separate work. No reference download, dependency install, source-data
 filtering, commit or push is performed by these tests.

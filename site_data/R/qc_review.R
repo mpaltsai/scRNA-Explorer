@@ -72,35 +72,98 @@ qc_baseline_signature <- function(object) {
   result
 }
 
-qc_filter_proposal <- function(metrics,thresholds,baseline_hash) {
+qc_optional_filter_defaults <- function() list(doublets="none",doublet_score=NA_real_,ambient=FALSE,ambient_fraction=NA_real_)
+
+qc_validate_optional_filters <- function(rules=qc_optional_filter_defaults()) {
+  if(!is.list(rules) || anyDuplicated(names(rules)) || !setequal(names(rules),names(qc_optional_filter_defaults())))
+    stop("Supply the named optional exclusion settings.")
+  if(length(rules$doublets)!=1L || !rules$doublets %in% c("none","prediction","score") ||
+    !is.logical(rules$ambient) || length(rules$ambient)!=1L || is.na(rules$ambient))
+    stop("Choose valid doublet and ambient exclusion options.")
+  fraction<-function(x,label) {
+    if(!is.numeric(x) || length(x)!=1L || !is.finite(x) || x<0 || x>1)
+      stop("Enter a maximum retained ",label," between 0 and 1; no cutoff is chosen automatically.")
+    as.numeric(x)
+  }
+  list(doublets=rules$doublets,
+    doublet_score=if(rules$doublets=="score") fraction(rules$doublet_score,"doublet score") else NA_real_,
+    ambient=rules$ambient,
+    ambient_fraction=if(rules$ambient) fraction(rules$ambient_fraction,"ambient fraction") else NA_real_)
+}
+
+qc_optional_filters_enabled <- function(rules) rules$doublets!="none" || isTRUE(rules$ambient)
+
+qc_optional_filter_state <- function(metrics,rules,results,baseline_hash) {
+  rules<-qc_validate_optional_filters(rules)
+  failures<-matrix(FALSE,nrow=nrow(metrics),ncol=0L);labels<-character();evidence<-list();values<-list()
+  add<-function(method,field,valid,fail,label) {
+    r<-results[[method]];status<-if(method=="doublets") "scored" else "estimated"
+    if(is.null(r) || !identical(r$status,status) || !identical(r$baseline_hash,baseline_hash) ||
+      length(r$revision)!=1L || is.na(r$revision) || !nzchar(r$revision))
+      stop("Optional exclusion requires current ",method," results for this baseline. Run/review the check and preview again; missing or stale evidence cannot exclude cells.")
+    v<-r$values
+    if(!is.data.frame(v) || !all(c("cell_id",field) %in% names(v)) || anyNA(v$cell_id) ||
+      anyDuplicated(v$cell_id) || nrow(v)!=nrow(metrics) || !setequal(v$cell_id,metrics$cell_id))
+      stop("Optional exclusion cell identifiers do not match the complete baseline.")
+    x<-v[[field]][match(metrics$cell_id,v$cell_id)]
+    if(!valid(x)) stop("Optional exclusion has missing/invalid ",method," evidence; no unavailable value is treated as zero or singlet.")
+    failures<<-cbind(failures,fail(x));colnames(failures)[ncol(failures)]<<-paste0("optional_",method)
+    labels<<-c(labels,label)
+    values[[paste0(field,"_used")]]<<-x
+    fields<-c("method","status","revision","baseline_hash","parameter_hash","analysis_context","software","config","core_md5","created_at")
+    ref<-stats::setNames(lapply(fields,function(field) r[[field]]),fields)
+    ref$values_hash<-digest::digest(data.frame(cell_id=metrics$cell_id,value=x),algo="sha256")
+    evidence[[method]]<<-ref
+  }
+  valid_fraction<-function(x) is.numeric(x) && length(x)==nrow(metrics) && all(is.finite(x)&x>=0&x<=1)
+  if(rules$doublets=="prediction") add("doublets","qc_diag_doublet_class",
+    function(x) !anyNA(x) && all(x %in% c("singlet","doublet")),function(x) x=="doublet","Predicted doublet")
+  if(rules$doublets=="score") add("doublets","qc_diag_doublet_score",valid_fraction,
+    function(x) x>rules$doublet_score,"High doublet score")
+  if(rules$ambient) add("ambient","qc_diag_ambient_fraction",valid_fraction,
+    function(x) x>rules$ambient_fraction,"High estimated ambient fraction")
+  list(rules=rules,failures=failures,labels=labels,evidence=evidence,values=values)
+}
+
+qc_filter_proposal <- function(metrics,thresholds,baseline_hash,
+    optional_rules=qc_optional_filter_defaults(),optional_results=list()) {
   thresholds <- qc_validate_thresholds(thresholds)
   spec <- qc_rule_spec()
   unavailable <- unique(spec$metric[vapply(spec$metric,function(n) !is.numeric(metrics[[n]]) || any(!is.finite(metrics[[n]])),logical(1))])
   if (!nrow(metrics) || length(unavailable)) stop("QC evidence unavailable: ",paste(unavailable,collapse=", "),
     ". Inspect annotation/metric coverage before previewing the existing nine-rule filter.")
   failures <- .qc_rule_failures(metrics,thresholds)
+  optional<-qc_optional_filter_state(metrics,optional_rules,optional_results,baseline_hash)
+  failures<-cbind(failures,optional$failures);labels<-c(spec$label,optional$labels)
   failed <- rowSums(failures)
-  reasons <- apply(failures,1,function(v) paste(spec$label[v],collapse="; "))
+  reasons <- apply(failures,1,function(v) paste(labels[v],collapse="; "))
   cells <- data.frame(cell_id=metrics$cell_id,cells=metrics$cells,sample=metrics$sample,
     decision=ifelse(failed==0L,"retain","proposed exclusion"),failed_rules=failed,reasons=reasons,stringsAsFactors=FALSE)
-  rule_counts <- data.frame(rule=spec$label,failed=as.integer(colSums(failures)),
+  # Record only the per-cell fields actually used, not another expression
+  # object. These decision-time values survive later model reruns/exports.
+  for(field in names(optional$values)) cells[[field]]<-optional$values[[field]]
+  rule_counts <- data.frame(rule=labels,failed=as.integer(colSums(failures)),
     failed_only_this_rule=as.integer(colSums(failures & (failed==1L))),stringsAsFactors=FALSE)
   combinations <- table(reasons[failed>0])
   overlap <- data.frame(combination=as.character(names(combinations)),cells=as.integer(combinations),stringsAsFactors=FALSE)
+  identity<-list(baseline_hash=baseline_hash,thresholds=thresholds)
+  if(qc_optional_filters_enabled(optional$rules)) identity$optional<-optional[c("rules","evidence")]
   list(baseline_hash=baseline_hash,thresholds=thresholds,
-    proposal_id=digest::digest(list(baseline_hash=baseline_hash,thresholds=thresholds),algo="sha256"),
+    optional_rules=optional$rules,optional_evidence=optional$evidence,optional_keep=rowSums(optional$failures)==0L,
+    proposal_id=digest::digest(identity,algo="sha256"),
     keep=failed==0L,per_cell=cells,rule_counts=rule_counts,
     overlap=overlap[order(overlap$cells,decreasing=TRUE),,drop=FALSE],
     summary=data.frame(baseline_cells=nrow(metrics),retained=sum(failed==0L),excluded=sum(failed>0L)))
 }
 
-qc_apply_filter <- function(object,proposal,reason,history=list(),optional_evidence=NULL) {
+qc_apply_filter <- function(object,proposal,reason,history=list(),optional_evidence=NULL,optional_results=list()) {
   if (length(reason)!=1L || is.na(reason) || !nzchar(trimws(reason))) stop("Provide a reason before applying filtering.")
   if (!identical(proposal$baseline_hash,qc_baseline_signature(object)) ||
       !identical(proposal$per_cell$cells,colnames(object))) stop("Preview is not for this baseline; preview again.")
   # Recheck the decision from the actual baseline. Never trust a supplied mask
   # or a stored preview from another method/threshold revision.
-  verified <- qc_filter_proposal(qc_review_metrics(object),proposal$thresholds,proposal$baseline_hash)
+  rules<-if(is.null(proposal$optional_rules)) qc_optional_filter_defaults() else proposal$optional_rules
+  verified <- qc_filter_proposal(qc_review_metrics(object),proposal$thresholds,proposal$baseline_hash,rules,optional_results)
   if (!identical(verified$proposal_id,proposal$proposal_id) || !identical(verified$keep,proposal$keep)) stop("Preview selection differs from the verified rules.")
   previous <- if (length(history)) history[[length(history)]]$revision else NA_character_
   record <- list(sample=unique(verified$per_cell$sample),baseline_hash=proposal$baseline_hash,
@@ -108,10 +171,12 @@ qc_apply_filter <- function(object,proposal,reason,history=list(),optional_evide
     reason=trimws(reason),applied_at=format(Sys.time(),tz="UTC",usetz=TRUE),
     per_cell=verified$per_cell,rule_counts=verified$rule_counts,overlap=verified$overlap,summary=verified$summary,
     qc_config=S4Vectors::metadata(object)$scrna_explorer_qc$config,
-    method="Inclusive bounds on the nine existing QC rules; no optional diagnostic exclusions",
+    optional_rules=verified$optional_rules,optional_evidence_used=verified$optional_evidence,optional_keep=verified$optional_keep,
+    method=if(qc_optional_filters_enabled(verified$optional_rules)) "Inclusive QC bounds plus explicitly selected doublet/ambient exclusions" else "Inclusive bounds on the nine existing QC rules; no optional diagnostic exclusions",
     # Hash function text/formals, not closure environments containing app state.
     implementation_hash=digest::digest(lapply(list(qc_rule_spec,qc_review_metrics,qc_validate_thresholds,
-      .qc_rule_failures,qc_filter_proposal,qc_apply_filter),function(f) list(formals=formals(f),body=deparse(body(f)))),algo="sha256"))
+      .qc_rule_failures,qc_optional_filter_defaults,qc_validate_optional_filters,qc_optional_filters_enabled,qc_optional_filter_state,
+      qc_filter_proposal,qc_apply_filter),function(f) list(formals=formals(f),body=deparse(body(f)))),algo="sha256"))
   if(length(optional_evidence)) record$optional_evidence<-optional_evidence
   record$revision <- digest::digest(list(record,sequence=length(history)+1L),algo="sha256")
   history <- c(history,list(record))
@@ -124,8 +189,9 @@ qc_apply_filter <- function(object,proposal,reason,history=list(),optional_evide
 
 # Hold all other cutoffs fixed while varying one cutoff. This is sensitivity to
 # settings, not validation of cell quality and not a target retention rate.
-qc_threshold_sensitivity <- function(metrics,thresholds,points=31L) {
+qc_threshold_sensitivity <- function(metrics,thresholds,points=31L,optional_keep=rep(TRUE,nrow(metrics))) {
   spec <- qc_rule_spec(); thresholds <- qc_validate_thresholds(thresholds)
+  if(!is.logical(optional_keep) || length(optional_keep)!=nrow(metrics) || anyNA(optional_keep)) stop("Optional sensitivity mask must match the baseline.")
   do.call(rbind,lapply(seq_len(nrow(spec)),function(i) {
     values <- metrics[[spec$metric[i]]]
     candidates <- unique(c(seq(min(values),max(values),length.out=points),thresholds[[spec$input[i]]]))
@@ -135,7 +201,7 @@ qc_threshold_sensitivity <- function(metrics,thresholds,points=31L) {
     other <- switch(as.character(i),`1`=2L,`2`=1L,`3`=4L,`4`=3L,`6`=7L,`7`=6L,`8`=9L,`9`=8L,NA_integer_)
     if (!is.na(other)) candidates <- candidates[if(spec$lower[i]) candidates<=thresholds[[spec$input[other]]] else candidates>=thresholds[[spec$input[other]]]]
     data.frame(rule=spec$label[i],threshold=candidates,
-      retained=vapply(candidates,function(v) {t<-thresholds;t[[spec$input[i]]]<-v;sum(rowSums(.qc_rule_failures(metrics,t))==0L)},integer(1)),
+      retained=vapply(candidates,function(v) {t<-thresholds;t[[spec$input[i]]]<-v;sum(rowSums(.qc_rule_failures(metrics,t))==0L & optional_keep)},integer(1)),
       current=thresholds[[spec$input[i]]],baseline_cells=nrow(metrics))
   }))
 }
