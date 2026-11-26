@@ -17,34 +17,80 @@ warnings and status are recorded separately from a filtering acceptance.
 
 ## Doublets
 
-1. Find the always-visible **Capture and runtime settings (per sample)** section
-   above the package/status tables and method tabs. Keep capture assignment unresolved
-   unless its identity is known. A file, donor or GEO accession does not establish
-   a physical capture. For a complete single capture, explicitly name it and
-   record its supporting evidence; alternatively select a cell-metadata column.
-2. Confirm that each declared capture's complete baseline population is present.
-   Use consistent capture IDs across inputs and distinct IDs for independent
-   captures. A capture known to span input samples is blocked here; its complete
-   population must be assembled/reviewed before scoring. Different files are
-   not silently treated as independent captures.
-3. Supply expected doublet rate, uncertainty and source. The shared-rate option
-   applies the user-entered values to every declared capture; alternatively
-   upload a CSV/TSV with `capture,expected_rate,uncertainty,source`. Fractions
-   use 0–1. Literal capture IDs, including leading zeroes, are preserved.
-   There is no automatically assumed 10X rate.
-4. Click **Run doublet check**. scDblFinder scores each confirmed capture
-   separately. Inspect score histograms, score versus UMIs/detected genes, and
-   predicted counts per capture, alongside the retained subset.
+The **Doublet analysis mode** selector provides two explicit paths. Switching
+mode, grouping or rate handling invalidates earlier scores until the next run.
+
+**Capture-informed** (the existing default) uses the always-visible capture
+declarations above the package/status tables. Name a confirmed single capture
+or select a capture metadata column, record supporting evidence and confirm
+the complete baseline population. A capture known to span multiple inputs is
+blocked on this path until assembled/reviewed together. Files, donors and GEO
+accessions are not silently declared physical captures.
+
+**Public-data exploratory** allows scoring when capture information is missing:
+
+1. Leave the shared capture assignment unresolved. Select **Public-data
+   exploratory: capture identity remains unknown** in the Doublets panel.
+2. Select **Selected input matrix as one provisional group**, or choose an
+   existing cell-metadata column for provisional groups. Every cell must have a
+   nonempty label in the chosen column. GEO metadata already attached to an SCE
+   can supply sample/library groups; this panel does not add a series-matrix
+   importer or establish that a GEO sample is one physical capture.
+3. Under **Expected doublet rates**, choose **Unknown expected rate** if there is
+   no supported estimate. No rate, uncertainty, rate-source text, capture ID,
+   capture-evidence text or completeness confirmation is required on this path.
+4. Click **Run doublet check**. Inspect the distributions, relationships with
+   UMIs/genes and predicted counts, with facets labelled **Provisional group**.
+
+Groups are scored separately within the selected sample's fixed baseline.
+Exploratory groups may mix or split physical captures. Use the broad available
+population before cell-type subsetting; small or unrepresentative populations
+can make predictions unreliable or cause the method to fail with a message.
+No cell is dropped to make a grouping complete. Missing metadata labels are
+unavailable grouping information, not a new biological group.
+
+Both modes also support explicit shared rates or uploaded per-group rates.
+The CSV/TSV columns are `group,expected_rate,uncertainty,source`; the earlier
+`capture` column is accepted as an alias for `group`. Literal identifiers,
+including leading zeroes, are retained. Conflicting group/capture columns are
+rejected. Explicit rates need reviewed numeric fractions and source/reasoning;
+uncertainty is an absolute +/- margin, not a confidence interval.
+
+Unknown-rate handling passes `dbr=NULL, dbr.sd=1`: thresholding does not enforce
+an expected doublet count. This is **not a claim that all rate assumptions have
+been removed**. scDblFinder retains its internal package defaults, including
+`dbr.per1k`, which are recorded with software versions and the threshold policy;
+they are not protocol calibration for Seq-Well or another unverified platform.
+See [the authors' parameter guidance](https://bioconductor.org/packages/release/bioc/vignettes/scDblFinder/inst/doc/scDblFinder.html).
 
 Scores/classes are predictions for review, not confirmed cell identities or a
 claim of calibrated classification accuracy. High counts alone do not establish
-a doublet. Unresolved capture/rate evidence produces **not_assessed** and `NA`
-scores; it never produces zero doublets or a singlet label by default. Capture
-completeness remains a user declaration rather than independently verified truth.
+a doublet. Incomplete capture declarations still produce **not_assessed** on
+the capture-informed path. Exploration is an explicit opt-in, not an automatic
+conversion of missing information into singlet labels. Capture completeness
+remains a user declaration rather than independently verified truth.
 
-For GSE176031, the pilot capture identity is still unresolved. Its doublet check
-must remain unassessed until supported capture information and rate assumptions
-are provided.
+For GSE176031, the pilot capture identity remains unresolved. It can now receive
+exploratory predictions by its input matrix (or reviewed metadata groups), with
+unknown-rate handling. Exports retain `qc_diag_capture=NA`, capture status
+`unknown`, the actual provisional group, grouping basis, analysis mode and rate
+mode. Confirmed-capture predictions require their separate documented inputs.
+Neither path automatically accepts a filtering decision or changes counts.
+
+Validation of the exploratory extension (26 November 2026): all 955 recorded
+expectations in the full suite passed, with no failures, errors or skips.
+The real app controller scored the existing 595-cell GSE176031 baseline using
+the input-matrix grouping and unknown-rate handling, with no capture declaration
+or invented numeric rate. It produced 96 provisional doublet predictions;
+these are not independent quality truth or an exclusion recommendation. All
+three doublet graphics rendered. A temporary 535-cell QC preview reused the
+baseline scores. Capture IDs stayed unavailable in exports; original counts,
+baseline and source-file checksum stayed unchanged. No filtering decision or
+expression checkpoint was saved. The synthetic-backend tests cover grouping
+changes, missing metadata labels, old rate-table aliases and capture-informed
+abstention; a separate real synthetic-data fit exercises the shared method.
+A follow-up compatibility run passed 122 expectations, including preservation
+of the earlier capture-keyed rate-table output for capture-informed runs.
 
 ## Ambient RNA
 

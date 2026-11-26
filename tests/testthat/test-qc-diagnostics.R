@@ -95,6 +95,7 @@ testthat::test_that("the adapter runs the existing doublet method on a known syn
   r<-qc_run_optional(b,"doublets",cfg,qc_baseline_signature(b),f$app_root)
   testthat::expect_identical(r$status,"scored")
   testthat::expect_true(all(is.finite(r$values$qc_diag_doublet_score)))
+  testthat::expect_identical(r$diagnostics$rate_table$capture,"simulation")
   testthat::expect_equal(nrow(r$values),ncol(b))
   testthat::expect_identical(digest::digest(b),before)
 })

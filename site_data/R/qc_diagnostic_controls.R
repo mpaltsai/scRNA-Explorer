@@ -18,7 +18,7 @@ qc_read_diagnostic_table <- function(upload) {
 }
 
 .qc_common_controls<-c("seed","use_library","library_path","capture_mode","capture_id","capture_column","capture_evidence","capture_complete","technology")
-.qc_method_controls<-list(doublets=c("rates_mode","expected_rate","uncertainty","rate_source"),
+.qc_method_controls<-list(doublets=c("doublet_mode","provisional_group_mode","provisional_group_column","rates_mode","expected_rate","uncertainty","rate_source"),
   ambient=c("ambient_method","pooled","clusters_column","maxIter","delta1","delta2","estimateDelta","convergence","varGenes","dbscanEps","droplet_compatible"),
   cell_cycle=c("marker_mode","marker_name","marker_species","nbin","ctrl_auto","ctrl","scale_factor","minimum_markers"))
 
@@ -35,9 +35,19 @@ qc_diagnostic_config <- function(input,prefix,method,uploads) {
     cfg$technology<-text("technology")
   }
   if(method=="doublets") {
-    cfg$rates_mode<-text("rates_mode");cfg$expected_rate<-number("expected_rate");cfg$uncertainty<-number("uncertainty");cfg$rate_source<-text("rate_source")
+    cfg$analysis_mode<-if(nzchar(text("doublet_mode"))) text("doublet_mode") else "capture"
+    if(cfg$analysis_mode=="exploratory") {
+      # Ignore unused capture declarations; provisional groups never establish
+      # physical capture identity, even if an earlier form contained an ID.
+      cfg$capture<-NULL
+      cfg$group_mode<-text("provisional_group_mode");cfg$group_column<-text("provisional_group_column")
+    }
+    cfg$rates_mode<-text("rates_mode")
+    if(cfg$rates_mode!="unknown") {
+      cfg$expected_rate<-number("expected_rate");cfg$uncertainty<-number("uncertainty");cfg$rate_source<-text("rate_source")
+    }
     if(cfg$rates_mode=="csv") {
-      if(is.null(uploads$rates)) cfg$invalid_reason<-"Upload a per-capture rate table first." else {
+      if(is.null(uploads$rates)) cfg$invalid_reason<-"Upload a per-group rate table first (the legacy capture column is also accepted)." else {
         cfg$rate_table<-uploads$rates$table;cfg$rate_table_source<-uploads$rates$source
       }
     }
@@ -76,11 +86,12 @@ qc_diagnostic_widgets <- function(prefix,kind,object,saved=list(),library_path="
   select<-function(n,label,choices,value="") shiny::selectInput(id(n),label,choices=choices,selected=g(n,value))
   cols<-names(SummarizedExperiment::colData(object));cols<-cols[!grepl("^qc_|^cell_cycle_|^ambient_|^scDblFinder",cols)]
   ready<-shiny::tags$div(style="display:none",shiny::textInput(id(paste0("ready_",kind)),NULL,prefix))
-  # Capture declarations are required for doublet assessment. Keep these
-  # controls visible rather than depending on a browser disclosure widget.
+  # Capture-informed declarations remain visible; public-data exploration
+  # explicitly leaves these unresolved and selects its groups below.
   if(kind=="common") return(shiny::tagList(ready,
     shiny::tags$section(shiny::h4("Capture and runtime settings (per sample)"),
       shiny::helpText("A capture is a physical cell-capture experiment. A donor, input file or GEO accession does not establish capture identity."),
+      shiny::helpText("For public data with unresolved captures, leave Capture assignment unresolved and select Public-data exploratory in the Doublets panel below."),
       select("capture_mode","Capture assignment",c("Unresolved"="unresolved","Explicitly one complete capture"="single","Existing cell metadata column"="metadata"),"unresolved"),
       text("capture_id","Capture ID for the explicit single-capture declaration"),
       select("capture_column","Capture column",c("Select a column"="",cols)),
@@ -91,13 +102,21 @@ qc_diagnostic_widgets <- function(prefix,kind,object,saved=list(),library_path="
       text("library_path","Existing R library path",library_path),
       shiny::helpText("No packages are installed or upgraded. Library search paths and RNG state are restored after each run."))))
   if(kind=="doublets") return(shiny::tagList(ready,
-    shiny::helpText("scDblFinder runs per confirmed capture. Both rates and capture completeness require review. Predicted labels do not remove cells."),
-    select("rates_mode","Expected doublet rates",c("Use the explicit rate below for every declared capture"="shared","Upload one rate per capture"="csv"),"shared"),
+    select("doublet_mode","Doublet analysis mode",c("Capture-informed: use reviewed capture declarations above"="capture","Public-data exploratory: capture identity remains unknown"="exploratory"),"capture"),
+    shiny::helpText("Capture-informed mode uses the declarations above. Exploratory mode does not require a capture ID, evidence text or completeness confirmation. Its groups and predictions are provisional. Neither mode removes cells."),
+    shiny::conditionalPanel(condition=paste0("input['",id("doublet_mode"),"'] === 'exploratory'"),
+      select("provisional_group_mode","Provisional analysis groups",c("Selected input matrix as one provisional group"="input","Groups from an existing cell-metadata column"="metadata"),"input"),
+      select("provisional_group_column","Provisional grouping column (metadata option only)",c("Select a column"="",cols)),
+      shiny::helpText("Prefer original sample/library groups when available. Groups may contain multiple or partial captures. A donor, condition or cell type is not a confirmed capture. Use the broad input population before cell-type subsetting; review limitations before interpreting predictions.")),
+    select("rates_mode","Expected doublet rates",c("Use the explicit rate below for every analysis group"="shared","Upload one rate per group"="csv","Unknown expected rate: classification-error-based thresholding"="unknown"),"shared"),
+    shiny::helpText("If the rate is unknown, select Unknown expected rate: no numeric rate, uncertainty or rate-source text is required. Thresholding uses dbr.sd=1; scDblFinder retains its package defaults for internal calculations, so this is not protocol-calibrated evidence."),
+    shiny::conditionalPanel(condition=paste0("input['",id("rates_mode"),"'] === 'shared'"),
     number("expected_rate","Expected doublet rate (fraction 0–1; no automatic 10X assumption)",NA_real_,max=1,step=.001),
-    number("uncertainty","Expected-rate uncertainty (fraction 0–1)",NA_real_,max=1,step=.001),text("rate_source","Rate and uncertainty source / reasoning"),
-    shiny::fileInput(id("rates_upload"),"Per-capture rates: capture, expected_rate, uncertainty, source",accept=c(".csv",".tsv")),
+    number("uncertainty","Allowed deviation around the expected rate (± fraction)",NA_real_,max=1,step=.001),text("rate_source","Rate and uncertainty source / reasoning")),
+    shiny::conditionalPanel(condition=paste0("input['",id("rates_mode"),"'] === 'csv'"),
+    shiny::fileInput(id("rates_upload"),"Per-group rates: group, expected_rate, uncertainty, source (capture column also accepted)",accept=c(".csv",".tsv")),
     shiny::helpText(if(is.null(uploads$rates)) "No stored rate table." else paste("Stored rate table:",uploads$rates$source$name)),
-    shiny::actionButton("qcClearRates","Clear stored rate table")))
+    shiny::actionButton("qcClearRates","Clear stored rate table"))))
   if(kind=="ambient") return(shiny::tagList(ready,
     select("ambient_method","Ambient-RNA check",c("DecontX estimates (original counts retained)"="DecontX","SoupX input readiness only"="SoupX"),"DecontX"),
     shiny::helpText("DecontX estimates depend on population structure. Without a reviewed capture assignment, pooled exploration must be explicitly enabled. SoupX is readiness-only here: paired raw/background-droplet input is not yet connected."),

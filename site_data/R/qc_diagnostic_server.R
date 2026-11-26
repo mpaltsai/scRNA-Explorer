@@ -88,7 +88,7 @@ qc_diagnostics_server <- function(input,output,session,baselines,review,app_root
     proxy<-stats::setNames(c(common,specific),paste0(p,c(names(common),names(specific))))
     proxy[[paste0(p,"ready_common")]]<-p;proxy[[paste0(p,"ready_",m)]]<-p
     cfg<-qc_diagnostic_config(proxy,p,m,uploads()[[n]])
-    if(m=="doublets" && !is.null(cfg)) cfg$cohort_context<-capture_context(n)
+    if(m=="doublets" && !is.null(cfg) && !identical(cfg$analysis_mode,"exploratory")) cfg$cohort_context<-capture_context(n)
     cfg
   })}),methods)
   current_results<-function(sample) {
@@ -100,7 +100,7 @@ qc_diagnostics_server <- function(input,output,session,baselines,review,app_root
           proxy<-stats::setNames(c(d$common,d[[m]]),paste0(p,c(names(d$common),names(d[[m]]))))
           proxy[[paste0(p,"ready_common")]]<-p;proxy[[paste0(p,"ready_",m)]]<-p
           cfg<-qc_diagnostic_config(proxy,p,m,uploads()[[sample]])
-          if(m=="doublets" && !is.null(cfg)) cfg$cohort_context<-capture_context(sample)
+          if(m=="doublets" && !is.null(cfg) && !identical(cfg$analysis_mode,"exploratory")) cfg$cohort_context<-capture_context(sample)
           cfg
         }
       }

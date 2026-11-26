@@ -9,6 +9,12 @@ sequences. The standalone diagnostic instructions below remain available;
 optional doublet, ambient-RNA and cell-cycle panels are now connected as
 diagnostic evidence in the same QC tab; see [optional QC panels](../docs/optional-qc-panels.md).
 
+The standalone examples below retain capture-informed defaults. The app also
+offers an explicit public-data exploratory mode with provisional matrix/metadata
+groups and unknown-rate thresholding; the linked guide describes that path.
+Missing capture information still blocks capture-informed examples, but no
+longer prevents an explicitly labelled exploratory check in the app.
+
 ## Shiny input integration: first review checkpoint
 
 Development of the app now takes place in the separate `feat/shiny-input-integration` worktree. The original checkout's tracked `site_data` remains at its previous state; it is not the place to run the new input workflow. From the development checkout, run:

@@ -89,21 +89,42 @@ qc_optional_prepare <- function(object,method,config,core,cohort=list()) {
   if(!is.null(config$invalid_reason)) stop(config$invalid_reason)
   params<-config$parameters;params$method_seed<-config$seed
   if(method=="doublets") {
-    captures<-qc_capture_assignment(object,config$capture,cohort)
-    if(!identical(config$rates_mode,"csv")) {
-      rates<-data.frame(capture=unique(captures),expected_rate=config$expected_rate,
-        uncertainty=config$uncertainty,source=config$rate_source,stringsAsFactors=FALSE)
-    } else rates<-config$rate_table
-    needed<-c("capture","expected_rate","uncertainty","source")
-    if(!is.data.frame(rates) || !all(needed %in% names(rates)) || anyNA(rates[,needed]) ||
-      anyDuplicated(rates$capture) || !setequal(as.character(rates$capture),unique(captures)) ||
-      !is.numeric(rates$expected_rate) || !is.numeric(rates$uncertainty) ||
-      any(!is.finite(rates$expected_rate)|rates$expected_rate<=0|rates$expected_rate>=1) ||
-      any(!is.finite(rates$uncertainty)|rates$uncertainty<0|rates$uncertainty>1) || any(!nzchar(trimws(rates$source))))
-      stop("Review a complete per-capture rate table: capture, expected_rate (0–1), uncertainty and source. No default 10X rate is assumed.")
-    object$qc_diagnostic_capture<-captures
-    params<-c(params,list(capture_column="qc_diagnostic_capture",capture_evidence=config$capture$evidence,
-      rate_table=rates,technology=config$technology))
+    mode<-if(is.null(config$analysis_mode)) "capture" else config$analysis_mode
+    if(!mode %in% c("capture","exploratory")) stop("Choose capture-informed or exploratory doublet analysis.")
+    params$analysis_mode<-mode
+    if(mode=="capture") {
+      groups<-qc_capture_assignment(object,config$capture,cohort)
+      object$qc_diagnostic_capture<-groups
+      params$capture_column<-"qc_diagnostic_capture";params$capture_evidence<-config$capture$evidence
+      params$group_basis<-"Reviewed capture declaration"
+    } else {
+      # A grouping is an explicit analysis assumption, never a fabricated
+      # capture ID. Work on each selected baseline, not the integrated cohort.
+      if(identical(config$group_mode,"input")) {
+        sample<-unique(as.character(object$qc_sample))
+        if(length(sample)!=1L || is.na(sample) || !nzchar(sample)) stop("Select a complete metadata grouping for this multi-sample input.")
+        groups<-rep(sample,ncol(object));params$group_basis<-paste("Selected input matrix:",sample)
+      } else if(identical(config$group_mode,"metadata")) {
+        column<-config$group_column
+        if(length(column)!=1L || !column %in% names(SummarizedExperiment::colData(object))) stop("Select an existing provisional grouping column.")
+        groups<-as.character(object[[column]])
+        if(length(groups)!=ncol(object) || anyNA(groups) || any(!nzchar(trimws(groups)))) stop("Provisional grouping has missing labels; supply a group for every cell or select the input-matrix grouping.")
+        params$group_basis<-paste("Provisional groups from metadata column:",column)
+      } else stop("Choose the selected input matrix or an existing metadata column for provisional groups.")
+      params$group_column<-"qc_diagnostic_group"
+    }
+    object$qc_diagnostic_group<-groups
+    params$rate_mode<-if(identical(config$rates_mode,"unknown")) "unknown" else "explicit"
+    if(!config$rates_mode %in% c("shared","csv","unknown")) stop("Choose shared, uploaded or unknown expected-rate handling.")
+    if(params$rate_mode=="explicit") {
+      rates<-if(identical(config$rates_mode,"csv")) config$rate_table else data.frame(
+        group=unique(groups),
+        expected_rate=if(length(config$expected_rate)==1L) config$expected_rate else NA_real_,
+        uncertainty=if(length(config$uncertainty)==1L) config$uncertainty else NA_real_,
+        source=if(length(config$rate_source)==1L) config$rate_source else "",stringsAsFactors=FALSE)
+      params$rate_table<-core$functions$.qc_doublet_rates(rates,groups)
+    }
+    params$technology<-config$technology
   } else if(method=="ambient") {
     captures<-tryCatch(qc_capture_assignment(object,config$capture),error=function(e) NULL)
     if(identical(config$ambient_method,"SoupX")) {
@@ -156,6 +177,9 @@ qc_run_optional <- function(object,method,config,baseline_hash,app_root=".",coho
     if(!available && !readiness) {out$reasons<-paste(package,"is unavailable in the selected existing libraries. No package installation attempted.");return(out)}
     prepared<-tryCatch(qc_optional_prepare(object,method,config,core,cohort),error=function(e) e)
     if(inherits(prepared,"error")) {out$reasons<-conditionMessage(prepared);return(out)}
+    if(method=="doublets") out$analysis_context<-list(mode=prepared$parameters$analysis_mode,
+      capture_status=if(identical(prepared$parameters$analysis_mode,"exploratory")) "unknown" else "declared",
+      group_basis=prepared$parameters$group_basis,rate_mode=prepared$parameters$rate_mode)
     run<-if(is.null(execute)) core$functions[[if(readiness) "ambient_rna_readiness_step" else c(doublets="doublet_qc_step",ambient="decontx_qc_step",cell_cycle="cell_cycle_qc_step")[[method]]]] else execute
     captured<-character()
     fitted<-tryCatch(withCallingHandlers(run(prepared$object,prepared$parameters),warning=function(w) {
@@ -193,7 +217,15 @@ qc_run_optional <- function(object,method,config,baseline_hash,app_root=".",coho
       }
       if(method=="cell_cycle" && (anyNA(out$values$qc_diag_phase) || any(!out$values$qc_diag_phase %in% c("G1","S","G2M","Undecided")))) stop("Invalid or unavailable predicted cell-cycle phases.")
     } else out$reasons<-fitted$diagnostics$reasons
-    if(method=="doublets") out$values$qc_diag_capture<-as.character(prepared$object$qc_diagnostic_capture)
+    if(method=="doublets") {
+      exploratory<-identical(prepared$parameters$analysis_mode,"exploratory")
+      out$values$qc_diag_doublet_group<-as.character(prepared$object$qc_diagnostic_group)
+      out$values$qc_diag_capture<-if(exploratory) rep(NA_character_,ncol(object)) else as.character(prepared$object$qc_diagnostic_capture)
+      out$values$qc_diag_capture_status<-if(exploratory) "unknown" else "declared"
+      out$values$qc_diag_doublet_mode<-prepared$parameters$analysis_mode
+      out$values$qc_diag_doublet_group_basis<-prepared$parameters$group_basis
+      out$values$qc_diag_doublet_rate_mode<-prepared$parameters$rate_mode
+    }
     if(method=="ambient" && out$status=="estimated") out$values$qc_diag_ambient_fit_group<-
       if(is.null(prepared$parameters$batch_column)) rep("Pooled exploration (capture unresolved)",ncol(object)) else as.character(prepared$object[[prepared$parameters$batch_column]])
     out

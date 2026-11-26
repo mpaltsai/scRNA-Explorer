@@ -8,23 +8,32 @@ qc_diagnostic_comparison <- function(comparison,result) {
   cbind(comparison,result$values[i,setdiff(names(result$values),c("cell_id","cells")),drop=FALSE])
 }
 
-qc_plot_doublet_distribution <- function(d) ggplot2::ggplot(d,ggplot2::aes(x=qc_diag_doublet_score,fill=qc_diag_doublet_class))+
-  ggplot2::geom_histogram(bins=30,position="identity",alpha=.6)+ggplot2::facet_grid(qc_diag_capture~stage,drop=FALSE)+
+.qc_doublet_plot_groups <- function(d) {
+  groups<-if("qc_diag_doublet_group" %in% names(d)) d$qc_diag_doublet_group else d$qc_diag_capture
+  exploratory<-if("qc_diag_doublet_mode" %in% names(d)) d$qc_diag_doublet_mode=="exploratory" else rep(FALSE,nrow(d))
+  d$qc_plot_group<-paste(ifelse(exploratory,"Provisional group:","Declared capture:"),groups)
+  d
+}
+
+qc_plot_doublet_distribution <- function(d) ggplot2::ggplot(.qc_doublet_plot_groups(d),ggplot2::aes(x=qc_diag_doublet_score,fill=qc_diag_doublet_class))+
+  ggplot2::geom_histogram(bins=30,position="identity",alpha=.6)+ggplot2::facet_grid(qc_plot_group~stage,drop=FALSE)+
   ggplot2::theme_bw()+ggplot2::labs(x="scDblFinder score",y="Cells",fill="Prediction",
-    caption="Each capture is scored separately. Predicted labels are evidence for review; no cells are removed by this check.")
+    caption="Groups are scored separately. Exploratory groups are provisional, with unknown capture identity. Predictions do not remove cells.")
 
 qc_plot_doublet_joint <- function(d,x="nUMI") {
+  d<-.qc_doublet_plot_groups(d)
   d$diagnostic_x<-log10(d[[x]])
   ggplot2::ggplot(d,ggplot2::aes(x=diagnostic_x,y=qc_diag_doublet_score,color=qc_diag_doublet_class))+
-    ggplot2::geom_point(alpha=.6,size=1)+ggplot2::facet_grid(qc_diag_capture~stage,drop=FALSE)+
+    ggplot2::geom_point(alpha=.6,size=1)+ggplot2::facet_grid(qc_plot_group~stage,drop=FALSE)+
     ggplot2::theme_bw()+ggplot2::labs(x=paste("log10",if(x=="nUMI") "UMIs" else "detected genes"),y="scDblFinder score",color="Prediction")
 }
 
 qc_plot_doublet_counts <- function(d) {
-  counts<-as.data.frame(table(capture=d$qc_diag_capture,stage=d$stage,prediction=d$qc_diag_doublet_class))
-  ggplot2::ggplot(counts,ggplot2::aes(x=capture,y=Freq,fill=prediction))+
+  d<-.qc_doublet_plot_groups(d)
+  counts<-as.data.frame(table(group=d$qc_plot_group,stage=d$stage,prediction=d$qc_diag_doublet_class))
+  ggplot2::ggplot(counts,ggplot2::aes(x=group,y=Freq,fill=prediction))+
     ggplot2::geom_col()+ggplot2::facet_wrap(~stage,drop=FALSE)+ggplot2::theme_bw()+
-    ggplot2::labs(x="Declared capture",y="Cells",fill="Prediction")
+    ggplot2::labs(x="Analysis group",y="Cells",fill="Prediction")
 }
 
 qc_plot_ambient_distribution <- function(d) ggplot2::ggplot(d,ggplot2::aes(x=100*qc_diag_ambient_fraction))+

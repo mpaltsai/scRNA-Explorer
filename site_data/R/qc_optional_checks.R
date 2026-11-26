@@ -168,51 +168,91 @@ ambient_rna_readiness_step <- function(object,parameters) {
     interpretation="Contamination is unknown, not zero. No correction has been performed."))
 }
 
+.qc_doublet_rates <- function(rates,groups) {
+  # Keep the old capture-named CSV/API compatible while using a neutral group
+  # identifier for provisional public-data groups.
+  key<-if(is.data.frame(rates) && "group" %in% names(rates)) "group" else "capture"
+  required<-c(key,"expected_rate","uncertainty","source")
+  if(!is.data.frame(rates) || !all(required %in% names(rates)) || anyNA(rates[,required]) ||
+    anyDuplicated(rates[[key]]) || !setequal(as.character(rates[[key]]),unique(groups)) ||
+    !is.numeric(rates$expected_rate) || !is.numeric(rates$uncertainty) ||
+    any(!is.finite(rates$expected_rate)|rates$expected_rate<=0|rates$expected_rate>=1) ||
+    any(!is.finite(rates$uncertainty)|rates$uncertainty<0|rates$uncertainty>1) ||
+    any(!nzchar(trimws(as.character(rates$source)))))
+    stop("Review a complete per-group rate table: group (or capture), expected_rate (0–1), uncertainty and source.")
+  if(all(c("group","capture") %in% names(rates)) && !identical(as.character(rates$group),as.character(rates$capture)))
+    stop("Rate table group and capture columns disagree; keep one unambiguous grouping column.")
+  rates$group<-as.character(rates[[key]])
+  rates[,c("group","expected_rate","uncertainty","source"),drop=FALSE]
+}
+
 doublet_qc_step <- function(object,parameters) {
   columns <- if (inherits(object,"SingleCellExperiment")) names(SummarizedExperiment::colData(object)) else names(object[[]])
   reasons <- character()
+  mode<-if(is.null(parameters$analysis_mode)) "capture" else parameters$analysis_mode
+  if(!mode %in% c("capture","exploratory")) stop("Choose capture-informed or exploratory doublet analysis.")
+  exploratory<-identical(mode,"exploratory")
   capture_column <- parameters$capture_column
-  captures <- if (is.null(capture_column) || !capture_column %in% columns) NULL else as.character(object[[capture_column]])
-  if (is.null(captures) || anyNA(captures) || any(!nzchar(captures))) reasons <- c(reasons,"Capture identities are unresolved; donors/files are not substituted for captures.")
-  if (is.null(parameters$capture_evidence) || !nzchar(parameters$capture_evidence)) reasons <- c(reasons,"Capture provenance/confirmation is required.")
+  group_column<-if(exploratory) parameters$group_column else capture_column
+  groups<-if(is.null(group_column) || !group_column %in% columns) NULL else as.character(object[[group_column]])
+  if(is.null(groups) || anyNA(groups) || any(!nzchar(trimws(groups)))) reasons<-c(reasons,
+    if(exploratory) "Provisional analysis groups are missing; select an input matrix or complete metadata grouping."
+    else "Capture identities are unresolved; donors/files are not substituted for captures.")
+  if(!exploratory && (is.null(parameters$capture_evidence) || !nzchar(parameters$capture_evidence))) reasons<-c(reasons,"Capture provenance/confirmation is required.")
+  if(exploratory && (length(parameters$group_basis)!=1L || is.na(parameters$group_basis) || !nzchar(parameters$group_basis)))
+    reasons<-c(reasons,"Record the provisional grouping basis; capture identity remains unknown.")
+  rate_mode<-if(is.null(parameters$rate_mode)) "explicit" else parameters$rate_mode
+  if(!rate_mode %in% c("explicit","unknown")) stop("Choose explicit or unknown expected-rate handling.")
+  unknown_rate<-identical(rate_mode,"unknown")
   rates <- parameters$rate_table
-  if (is.null(rates)) reasons <- c(reasons,"Expected doublet rate, uncertainty and their source require review; no 10x rate is assumed.")
+  if(!unknown_rate && is.null(rates)) reasons<-c(reasons,"Expected doublet rate, uncertainty and their source require review; no 10x rate is assumed.")
   if (!requireNamespace("scDblFinder",quietly=TRUE)) reasons <- c(reasons,"scDblFinder is not available in this R session's library paths.")
   if (length(reasons)) return(list(object=object,diagnostics=list(method="scDblFinder",status="not_assessed",
     reasons=reasons,excluded_cells=0L,technology=parameters$technology)))
-  required <- c("capture","expected_rate","uncertainty","source")
-  if (!is.data.frame(rates) || !all(required %in% names(rates)) || anyNA(rates[,required]) ||
-      anyDuplicated(rates$capture) || !setequal(as.character(rates$capture),unique(captures)) ||
-      !is.numeric(rates$expected_rate) || !is.numeric(rates$uncertainty) ||
-      any(!is.finite(rates$expected_rate) | rates$expected_rate<=0 | rates$expected_rate>=1) ||
-      any(!is.finite(rates$uncertainty) | rates$uncertainty<0 | rates$uncertainty>1) ||
-      any(!nzchar(as.character(rates$source)))) stop("Supply a complete capture-specific rate_table: capture, expected_rate (0..1), uncertainty, source.")
+  rates<-if(unknown_rate) NULL else .qc_doublet_rates(rates,groups)
   method_seed <- parameters$method_seed
   if (is.null(method_seed) || length(method_seed)!=1L || !is.numeric(method_seed) || is.na(method_seed) ||
       method_seed<0 || method_seed>.Machine$integer.max || method_seed!=floor(method_seed)) stop("Supply a nonnegative integer method_seed.")
   counts <- .qc_counts(object)
   if (any(Matrix::colSums(counts)<=0)) stop("Review zero-count cells first; no automatic cell exclusions.")
   scores <- rep(NA_real_,ncol(object)); classes <- rep(NA_character_,ncol(object)); summaries <- list()
-  for (capture in unique(captures)) {
-    idx <- which(captures==capture)
-    rate <- rates[as.character(rates$capture)==capture,,drop=FALSE]
+  for (group in unique(groups)) {
+    idx <- which(groups==group)
+    rate<-if(unknown_rate) NULL else rates[rates$group==group,,drop=FALSE]
     # Temporary count-only SCE prevents stale reductions/normalized assays from
     # influencing a QC rerun. Counts stay sparse and no checkpoint is written.
     temporary <- SingleCellExperiment::SingleCellExperiment(assays=list(counts=counts[,idx,drop=FALSE]))
-    message("scDblFinder capture: ",capture," (",length(idx)," cells)")
-    temporary <- scDblFinder::scDblFinder(temporary,clusters=FALSE,dbr=rate$expected_rate,
-      dbr.sd=rate$uncertainty,BPPARAM=BiocParallel::SerialParam(RNGseed=method_seed),verbose=TRUE)
+    message("scDblFinder ",if(exploratory) "provisional group: " else "capture: ",group," (",length(idx)," cells)")
+    # Unknown rate relaxes the threshold's expected-count constraint, not all
+    # internal assumptions. Keep the package's default dbr calculation visible
+    # in diagnostics rather than pretending that capture loading is known.
+    temporary <- scDblFinder::scDblFinder(temporary,clusters=FALSE,
+      dbr=if(unknown_rate) NULL else rate$expected_rate,
+      dbr.sd=if(unknown_rate) 1 else rate$uncertainty,
+      BPPARAM=BiocParallel::SerialParam(RNGseed=method_seed),verbose=TRUE)
     if (!identical(colnames(temporary),colnames(object)[idx])) stop("Doublet method changed cell identities/order.")
     scores[idx] <- temporary$scDblFinder.score
     classes[idx] <- as.character(temporary$scDblFinder.class)
-    summaries[[capture]] <- data.frame(capture=capture,cells=length(idx),predicted_doublets=sum(classes[idx]=="doublet"))
+    summaries[[group]]<-data.frame(group=group,capture=if(exploratory) NA_character_ else group,
+      cells=length(idx),predicted_doublets=sum(classes[idx]=="doublet"))
   }
   object$scDblFinder.score <- scores
   object$scDblFinder.class <- classes
   list(object=object,diagnostics=list(method="scDblFinder",status="scored",capture_column=capture_column,
-    capture_evidence=parameters$capture_evidence,technology=parameters$technology,rate_table=rates,
-    method_seed=method_seed,clusters=FALSE,excluded_cells=0L,per_capture=do.call(rbind,summaries),
-    interpretation="Predicted doublet evidence only; high counts alone do not establish a doublet. No cells removed."))
+    analysis_mode=mode,capture_status=if(exploratory) "unknown" else "declared",
+    group_column=group_column,group_basis=if(exploratory) parameters$group_basis else "Reviewed capture declaration",
+    capture_evidence=if(exploratory) NULL else parameters$capture_evidence,
+    technology=parameters$technology,rate_mode=rate_mode,
+    # Preserve the earlier capture-keyed diagnostic table for declared captures;
+    # provisional group names must never be exported as physical capture IDs.
+    rate_table=if(!exploratory && !is.null(rates)) cbind(capture=rates$group,rates) else rates,
+    threshold_policy=if(unknown_rate) "dbr=NULL; dbr.sd=1: classification-error-based threshold; package internal defaults retained" else "Reviewed explicit rate and uncertainty",
+    internal_dbr_per1k_default=if(unknown_rate) formals(scDblFinder::scDblFinder)$dbr.per1k else NULL,
+    method_seed=method_seed,clusters=FALSE,excluded_cells=0L,per_group=do.call(rbind,summaries),
+    per_capture=if(exploratory) NULL else do.call(rbind,summaries),
+    interpretation=paste(if(exploratory) "Exploratory predictions by provisional analysis group; physical capture identity/completeness unknown. Grouping may mix or split captures." else "Predictions by declared capture.",
+      if(unknown_rate) "Expected rate unknown: thresholding uses classification error; package internal rate defaults remain and are not protocol calibration." else "Explicit expected-rate assumptions recorded.",
+      "Predicted evidence only, not validated doublet identities. No cells removed.")))
 }
 
 decontx_qc_step <- function(object,parameters) {

@@ -43,7 +43,7 @@ qc_diag_fake_fit <- function(object,parameters) {
     object$cell_cycle_G2M_score<-rev(seq_len(ncol(object)))/10
     object$cell_cycle_phase<-rep(c("S","G2M"),length.out=ncol(object))
     diagnostics<-list(status="scored",regression_applied=FALSE,excluded_cells=0L)
-  } else if(!is.null(parameters$rate_table)) {
+  } else if(!is.null(parameters$rate_table) || !is.null(parameters$group_column) || !is.null(parameters$capture_column)) {
     object$scDblFinder.score<-seq(.05,.95,length.out=ncol(object))
     object$scDblFinder.class<-ifelse(object$scDblFinder.score>.5,"doublet","singlet")
     diagnostics<-list(status="scored",excluded_cells=0L)
@@ -60,7 +60,7 @@ qc_diag_set_controls <- function(session,controller,method,overrides=list(),app_
   p<-shiny::isolate(controller$prefix())
   values<-c(list(seed=1,use_library=TRUE,library_path=qc_optional_library(app_root),
     capture_mode="unresolved",capture_id="",capture_column="",capture_evidence="",capture_complete=FALSE,technology="simulation"),
-    switch(method,doublets=list(rates_mode="shared",expected_rate=.1,uncertainty=.02,rate_source="Simulation parameter"),
+    switch(method,doublets=list(doublet_mode="capture",provisional_group_mode="input",provisional_group_column="",rates_mode="shared",expected_rate=.1,uncertainty=.02,rate_source="Simulation parameter"),
       ambient=list(ambient_method="DecontX",pooled=FALSE,clusters_column="",maxIter=20,delta1=10,delta2=10,estimateDelta=TRUE,convergence=.001,varGenes=20,dbscanEps=1,droplet_compatible=FALSE),
       cell_cycle=list(marker_mode="seurat",marker_name="",marker_species="",nbin=2,ctrl_auto=FALSE,ctrl=2,scale_factor=10000,minimum_markers=1)))
   values[names(overrides)]<-overrides
