@@ -17,7 +17,8 @@ warnings and status are recorded separately from a filtering acceptance.
 
 ## Doublets
 
-1. Expand **Capture and runtime settings**. Keep capture assignment unresolved
+1. Find the always-visible **Capture and runtime settings (per sample)** section
+   above the package/status tables and method tabs. Keep capture assignment unresolved
    unless its identity is known. A file, donor or GEO accession does not establish
    a physical capture. For a complete single capture, explicitly name it and
    record its supporting evidence; alternatively select a cell-metadata column.

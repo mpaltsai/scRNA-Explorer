@@ -76,8 +76,10 @@ qc_diagnostic_widgets <- function(prefix,kind,object,saved=list(),library_path="
   select<-function(n,label,choices,value="") shiny::selectInput(id(n),label,choices=choices,selected=g(n,value))
   cols<-names(SummarizedExperiment::colData(object));cols<-cols[!grepl("^qc_|^cell_cycle_|^ambient_|^scDblFinder",cols)]
   ready<-shiny::tags$div(style="display:none",shiny::textInput(id(paste0("ready_",kind)),NULL,prefix))
+  # Capture declarations are required for doublet assessment. Keep these
+  # controls visible rather than depending on a browser disclosure widget.
   if(kind=="common") return(shiny::tagList(ready,
-    shiny::tags$details(shiny::tags$summary("Capture and runtime settings (per sample)"),
+    shiny::tags$section(shiny::h4("Capture and runtime settings (per sample)"),
       shiny::helpText("A capture is a physical cell-capture experiment. A donor, input file or GEO accession does not establish capture identity."),
       select("capture_mode","Capture assignment",c("Unresolved"="unresolved","Explicitly one complete capture"="single","Existing cell metadata column"="metadata"),"unresolved"),
       text("capture_id","Capture ID for the explicit single-capture declaration"),
