@@ -187,6 +187,7 @@ qc_diagnostics_server <- function(input,output,session,baselines,review,app_root
     qcDoubletUmiGenes=function() qc_plot_doublet_umi_genes(compared("doublets")),
     qcAmbientDistribution=function() qc_plot_ambient_distribution(compared("ambient")),qcAmbientJoint=function() qc_plot_ambient_joint(compared("ambient"),x_axis()),
     qcAmbientUmiGenesClusters=function() qc_plot_ambient_umi_genes_clusters(compared("ambient")),
+    qcAmbientUmiGenesScore=function() qc_plot_ambient_umi_genes_score(compared("ambient")),
     qcAmbientPopulations=function() qc_plot_ambient_populations(compared("ambient")),qcAmbientFit=function() {
       r<-fitted("ambient");tryCatch(qc_plot_ambient_fit(r),error=function(e) shiny::validate(shiny::need(FALSE,conditionMessage(e))))
     },qcCycleScores=function() qc_plot_cycle_scores(compared("cell_cycle")),qcCycleCounts=function() qc_plot_cycle_counts(compared("cell_cycle")),qcCycleQC=function() qc_plot_cycle_qc(compared("cell_cycle")))

@@ -9,4 +9,5 @@ testthat::test_that("QC plots follow Overview and cell/decision downloads surviv
   for(id in c("qcCellsDownload","qcDecisionsDownload","qcOptionalFilterControls"))
     testthat::expect_length(xml2::xml_find_all(d,paste0('//*[@id="',id,'"]')),1L)
   testthat::expect_length(xml2::xml_find_all(d,'//*[@id="qcAmbientUmiGenesClusters"]/ancestor::*[@data-value="ambient"]'),1L)
+  testthat::expect_length(xml2::xml_find_all(d,'//*[@id="qcAmbientUmiGenesScore"]/ancestor::*[@data-value="ambient"]'),1L)
 })

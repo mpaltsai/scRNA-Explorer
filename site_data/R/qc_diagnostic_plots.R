@@ -78,6 +78,20 @@ qc_plot_ambient_umi_genes_clusters <- function(d) {
       caption="Colours identify preliminary DecontX clusters within each fit, not contamination levels or final cell types. No entire cluster is excluded automatically.")
 }
 
+qc_plot_ambient_umi_genes_score <- function(d) {
+  # Use the same cells/axes as the cluster view, colouring by DecontX's fraction
+  # expressed as a percentage. A fixed scale makes baseline/retained colours
+  # comparable. Draw missing estimates first and higher estimates last.
+  d$ambient_plot_percent<-100*d$qc_diag_ambient_fraction
+  d<-d[order(d$ambient_plot_percent,na.last=FALSE),,drop=FALSE]
+  ggplot2::ggplot(d,ggplot2::aes(x=nUMI,y=nGene,color=ambient_plot_percent))+
+    ggplot2::geom_point(alpha=.7,size=1)+ggplot2::scale_x_log10()+ggplot2::scale_y_log10()+
+    ggplot2::scale_colour_viridis_c(option="C",limits=c(0,100),na.value="#777777")+
+    ggplot2::facet_grid(qc_diag_ambient_fit_group~stage,drop=FALSE)+ggplot2::theme_bw()+
+    ggplot2::labs(x="UMIs (log scale)",y="Detected genes (log scale)",color="Estimated contamination (%)",
+      caption="Exploratory DecontX estimates; grey indicates an unavailable estimate. Retained panels reuse baseline estimates. Original counts remain selected.")
+}
+
 qc_plot_ambient_populations <- function(d) ggplot2::ggplot(d,ggplot2::aes(x=qc_diag_ambient_population,y=100*qc_diag_ambient_fraction))+
   ggplot2::geom_boxplot(outlier.alpha=.3)+ggplot2::facet_grid(qc_diag_ambient_fit_group~stage,drop=FALSE)+ggplot2::theme_bw()+
   ggplot2::labs(x="Preliminary population (not final biological clusters)",y="Estimated contamination (%)")

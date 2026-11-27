@@ -164,6 +164,21 @@ faceted separately because a cluster label is local to its fit. These are not
 final clustering/cell-type annotations. Cluster membership itself is not an
 exclusion rule: the optional ambient rule uses each cell's estimated fraction.
 
+**UMIs versus detected genes: ambient-RNA contamination score** adds the same
+log-scaled count axes, coloured by each cell's DecontX estimate rather than its
+preliminary cluster. The legend expresses fractions as percentages with a common
+0–100% scale across baseline and preview/applied panels and separate fit-group
+facets. Higher estimates are drawn last; unavailable estimates are grey. Both
+views join the existing baseline results by stable cell ID and reuse the same
+estimates for retained cells, without another model fit or count correction.
+These are exploratory estimated contamination fractions, not validated cell-
+quality probabilities.
+
+Validation on 2026-11-27: 111 focused plotting, layout and Shiny-controller checks
+passed with zero failures, errors or skips. Checks cover shuffled score rows,
+percentage conversion, endpoints/missing values, shared scales for preview and
+applied labels, unchanged baseline data and normal pre-run readiness messages.
+
 Without background droplets, a fit with fewer than two preliminary populations
 is unavailable evidence rather than a zero-contamination result. The method is
 population-dependent even when it returns numeric estimates. Original counts
