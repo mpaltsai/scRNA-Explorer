@@ -1,6 +1,6 @@
 # Reference maintenance is separate from reading counts and preparing QC.
-# Only an explicit catalogue check accesses the network; only an explicit
-# download saves a new annotation table. Neither action selects it for analysis.
+# Only explicit maintenance actions access providers. Downloads and supplements
+# save separate annotation versions; neither action selects one for analysis.
 annotation_cache_dir <- function(app_root=".") {
   getOption("scrnaExplorer.annotationCache",file.path(normalizePath(app_root,mustWork=TRUE),"..","analysis","local","annotation-cache"))
 }

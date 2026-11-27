@@ -1,11 +1,12 @@
 # Maintenance has its own state: checking/downloading never invalidates QC.
 # Only choosing a different reference/build changes the annotation configuration.
 annotation_reference_server <- function(input,output,session,app_root=".",cache_dir=NULL,
-    catalog_fetch=NULL,resource_fetch=NULL) {
+    catalog_fetch=NULL,resource_fetch=NULL,supplement_fetch=NULL) {
   api <- .annotation_cache_api(app_root)
   if (is.null(cache_dir)) cache_dir <- api$annotation_cache_dir(app_root)
   if (is.null(catalog_fetch)) catalog_fetch <- api$annotationhub_catalog
   if (is.null(resource_fetch)) resource_fetch <- api$annotationhub_fetch
+  if (is.null(supplement_fetch)) supplement_fetch <- api$grch37_biomart_fetch
   checked <- shiny::reactiveVal(NULL)
   message <- shiny::reactiveVal("")
   busy <- shiny::reactiveVal(FALSE)
@@ -52,9 +53,49 @@ annotation_reference_server <- function(input,output,session,app_root=".",cache_
         choices=c("Select a resource"="",stats::setNames(d$resource_id,paste(d$resource_id,d$title))),selected=""),
       shiny::textInput("annotationUpdateReason","Reason for adding this reference"),
       shiny::checkboxInput("annotationDownloadConsent","Download this resource into the project cache (may require hundreds of MB)",FALSE),
-      shiny::helpText("GTF references provide gene IDs, names and biotypes. Descriptions and Entrez links are unavailable: the current description-based hemoglobin QC cannot be calculated, and GO/Entrez-based ribosomal protein flags may remain unresolved. QC filtering requires the missing hemoglobin evidence; RNA biotypes are still labelled."),
+      shiny::helpText("GTF references provide gene IDs, names and biotypes. Descriptions and Entrez links are unavailable in the GTF itself. For human GRCh37 Ensembl 75, use the separate BioMart supplement controls to restore available missing fields. Without these fields, hemoglobin QC and some ribosomal protein flags remain unavailable."),
       shiny::actionButton("annotationDownload","Download as a separate reference"))
   })
+  output$annotationSupplementControls <- shiny::renderUI({
+    library_revision()
+    if (!identical(input$typeOrganism,"Homo sapiens") || !identical(input$annotationDataBuild,"GRCh37")) return(NULL)
+    entries <- api$list_annotation_references("Homo sapiens",app_root,cache_dir)
+    eligible <- entries[vapply(entries,function(e) {
+      p <- e$provenance
+      identical(p$source,"AnnotationHub Ensembl GTF") && identical(p$genome_build,"GRCh37") &&
+        identical(p$annotation_release,"75") && is.null(p$supplement)
+    },logical(1))]
+    if (!length(eligible)) return(NULL)
+    shiny::tagList(shiny::h5("Complete missing GRCh37 annotation fields"),
+      shiny::helpText("Retrieve descriptions and Entrez links from Ensembl GRCh37 BioMart, verified as Ensembl 75. Save a separate reference; counts and prepared QC are unchanged. Ordinary annotation loading stays offline."),
+      shiny::selectInput("annotationSupplementParent","GRCh37 reference to supplement",
+        choices=stats::setNames(names(eligible),vapply(eligible,`[[`,character(1),"label"))),
+      shiny::textInput("annotationSupplementReason","Reason for supplementing this reference"),
+      shiny::checkboxInput("annotationSupplementConsent","Retrieve BioMart annotations and save a separate local reference",FALSE),
+      shiny::actionButton("annotationSupplement","Add missing fields from GRCh37 BioMart"))
+  })
+  selected_supplement <- shiny::reactive({
+    library_revision()
+    if (!identical(input$typeOrganism,"Homo sapiens")) return(NULL)
+    e <- api$list_annotation_references("Homo sapiens",app_root,cache_dir)[[configuration()$reference_id]]
+    if (is.null(e$provenance$supplement)) NULL else e
+  })
+  output$annotationSupplementCoverage <- shiny::renderTable({
+    e <- selected_supplement(); if (is.null(e)) return(NULL)
+    s <- e$provenance$supplement$summary
+    data.frame(measure=names(s),reference_rows=as.integer(unlist(s)),row.names=NULL)
+  },rownames=FALSE)
+  output$annotationSupplementReviewControls <- shiny::renderUI({
+    if (is.null(selected_supplement())) return(NULL)
+    shiny::tagList(shiny::helpText("BioMart filled missing fields only. Multiple Entrez links are retained; conflicting descriptions remain unresolved. Download the complete per-row supplement review."),
+      shiny::downloadButton("annotationSupplementMappingDownload","Download BioMart supplement review"))
+  })
+  output$annotationSupplementMappingDownload <- shiny::downloadHandler(
+    filename=function() "grch37-biomart-supplement-review.csv",content=function(path) {
+      e <- shiny::req(selected_supplement())
+      d <- api$load_annotation_supplement_review(e$reference_id,app_root,cache_dir)
+      utils::write.csv(d,path,row.names=FALSE,na="")
+    })
   shiny::observeEvent(target(),{
     revision <<- revision+1L
     checked(NULL); busy(FALSE)
@@ -109,6 +150,25 @@ annotation_reference_server <- function(input,output,session,app_root=".",cache_
         library_revision(library_revision()+1L)
         message(paste("Saved",entry$label,"in the project cache. To use it, choose it under Annotation reference, then Add gene annotations. Existing QC results still use their recorded reference."))
       },error=function(e) message(paste("Reference download stopped:",conditionMessage(e),"Existing references and QC results are unchanged.")))
+      if (token==revision) busy(FALSE)
+    }),once=TRUE)
+  },ignoreInit=TRUE)
+  shiny::observeEvent(input$annotationSupplement,{
+    reason <- input$annotationSupplementReason; id <- input$annotationSupplementParent
+    if (!identical(input$typeOrganism,"Homo sapiens") || !identical(input$annotationDataBuild,"GRCh37") ||
+        length(id)!=1L || is.na(id) || !isTRUE(input$annotationSupplementConsent) ||
+        length(reason)!=1L || is.na(reason) || !nzchar(trimws(reason))) {
+      message("Choose a human GRCh37 reference, confirm BioMart retrieval and provide a reason. No supplement requested.");return()
+    }
+    revision <<- revision+1L; token <- revision
+    busy(TRUE);message("Retrieving verified GRCh37 BioMart fields; existing references and prepared QC remain active…")
+    session$onFlushed(function() shiny::isolate({
+      if (session$isClosed() || token!=revision) return(invisible(NULL))
+      tryCatch({
+        e <- api$supplement_grch37_reference(id,reason,app_root,cache_dir,supplement_fetch)
+        library_revision(library_revision()+1L)
+        message(paste("Saved",e$label,"as a separate reference. Select it under Annotation reference, then Add gene annotations and review QC again. Existing results remain pinned to their original reference."))
+      },error=function(e) message(paste("BioMart supplement stopped:",conditionMessage(e),"Existing references and QC results are unchanged.")))
       if (token==revision) busy(FALSE)
     }),once=TRUE)
   },ignoreInit=TRUE)

@@ -4,6 +4,7 @@
 .annotation_cache_api <- function(app_root) {
   e <- new.env(parent=baseenv())
   sys.source(file.path(app_root,"R","annotation_reference_cache.R"),envir=e)
+  sys.source(file.path(app_root,"R","annotation_biomart_supplement.R"),envir=e)
   e
 }
 

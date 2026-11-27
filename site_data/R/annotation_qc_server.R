@@ -49,6 +49,8 @@ annotation_qc_server <- function(input,output,session,records,app_root=".",refer
       resource_id=value("resource_id"),snapshot=value("snapshot_date"),
       annotation_release=value("annotation_release"),genome_build=value("genome_build"),
       source=r$source,reference_id=value("reference_id"),data_genome_build=p[[1]]$config$data_genome_build,
+      supplement=if (is.null(r$supplement)) "None" else paste(r$supplement$source,
+        "gene models",r$supplement$annotation_release,r$supplement$mart_version,"retrieved",r$supplement$retrieved_at),
       ribosomal_source=if (identical(p[[1]]$config$ribosomal_reference$status,"available")) {
         paste(p[[1]]$config$ribosomal_reference$package,p[[1]]$config$ribosomal_reference$package_version)
       } else "Protein reference unavailable; RNA biotypes only")

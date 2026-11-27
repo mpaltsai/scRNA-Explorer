@@ -15,7 +15,7 @@ In the development app's input tab:
    declaration, not an inferred or independently verified property of the counts.
 2. The bundled export remains the default. Its unknown build remains visible.
 3. Expand **Annotation reference maintenance**, then **Check for reference
-   updates**. Only this action checks online. It may download AnnotationHub's
+   updates**. This action checks the AnnotationHub catalogue online. It may download AnnotationHub's
    catalogue database; it does not download an EnsDb annotation resource.
 4. Review the candidates. Only Ensembl EnsDb or GTF-derived gene annotations
    for the selected species and known genome build are listed.
@@ -119,10 +119,65 @@ Consequently GO/Entrez-based ribosomal protein flags may be unresolved; RNA
 biotypes remain available. The existing hemoglobin definition uses descriptions
 starting with “hemoglobin”, so GTF-based hemoglobin metrics are unavailable
 (NA, not zero). The annotation status warns about this, and existing QC filtering
-continues to block on missing evidence. A richer matched reference or an explicit
-future decision about an alternative hemoglobin definition is needed before
-filtering with this GTF. A different source must not silently supply missing
-annotations under the GTF release's provenance.
+continues to block on missing evidence for the unsupplemented reference. The
+separate BioMart supplement below can restore the available descriptions and
+Entrez links without changing the existing gene definitions. Its provenance
+explicitly distinguishes the two sources.
+
+## Supplementing the GRCh37 reference
+
+With human counts and **GRCh37 / hg19** selected, expand **Annotation reference
+maintenance**. **Complete missing GRCh37 annotation fields** accepts an
+unsupplemented, cached human Ensembl 75 GTF reference. Give a reason, confirm
+retrieval and click **Add missing fields from GRCh37 BioMart**. This is a second
+explicit network action; ordinary reference loading and QC preparation still
+stay offline. Errors or unavailable services leave existing references and
+prepared QC active. No packages are installed and no global settings change.
+
+The implementation verifies the dedicated service host and the returned human
+dataset's GRCh37 assembly. Ensembl documents its GRCh37 gene models as frozen at
+release 75, but the BioMart service may report a newer release. On 2026-11-27 it
+reported `Ensembl Genes 116` with dataset `GRCh37.p13`. These are recorded
+separately: this does not describe current descriptions/cross-references as a
+historical 2014 snapshot. See [Ensembl's GRCh37 documentation](https://jun2026.archive.ensembl.org/info/website/tutorials/grch37.html).
+
+Queries use BioMart's XML interface from R with the existing `httr2` and `xml2`
+packages. Redirects are disabled. Registry/dataset/attribute metadata are
+validated before querying, and a `[success]` completion stamp is required before
+accepting the data. The source metadata, actual mart and dataset versions,
+retrieval time, requested fields, query XML, metadata-response hashes and the
+normalized gene-row hash are retained.
+This avoids relying on a default BioMart assembly or an interrupted response.
+The protocol is documented by [Ensembl](https://useast.ensembl.org/info/data/biomart/biomart_restful.html).
+
+Join policy:
+
+- Match by exact Ensembl gene ID. Preserve the parent annotation rows, order,
+  gene names, biotypes and chromosomes; never join expression matrices.
+- Fill only empty descriptions/Entrez links. Preserve existing values and
+  record disagreements for review.
+- Fill a missing description only when the returned nonempty descriptions
+  agree. Conflicting descriptions remain NA.
+- Retain all Entrez candidates as a list per gene. Ribosomal membership uses
+  the existing agreement rule across candidates; it never takes the first ID.
+- Keep unavailable fields unresolved. Extra BioMart genes are not added to
+  the parent reference or counts.
+
+A separate versioned reference contains `reference.rds`, a compact returned
+`supplement.rds`, `supplement-review.csv` and its manifest. Parent provenance,
+checksums, coverage and merge policy are recorded. Repeated identical payloads
+reuse the same version; retrieval time alone does not create a new reference.
+The review records original values, candidates and each per-row outcome; the
+UI shows coverage and provides **Download BioMart supplement review** when a
+supplemented reference is selected. Checksums are verified before export.
+
+Creating a supplement does not select it or change prepared results. Select
+**GRCh37 — Ensembl 75 (AH10684, GTF + BioMart)** under **Annotation reference**,
+then **Add gene annotations**, review the mapping and rebuild the **UMIs >= 100**
+baseline. This explicit selection clears dependent results through the existing
+invalidation path. No count matrix or expression checkpoint is saved by the
+maintenance operation. The primary resource, supplementary provider and
+separate installed OrgDb GO source remain visible in provenance.
 
 The suffix checkbox explains that a versioned ID such as
 `ENSG00000141510.18` can be matched using `ENSG00000141510`. It changes only
@@ -138,6 +193,26 @@ counts remain unchanged. The original sample label and rename history are
 retained in the baseline SCE's import provenance.
 
 ## Verification
+
+Validation of BioMart supplementation on 2026-11-27: the live XML query returned
+66,978 annotation rows with a completion stamp. The 63,677 parent reference rows
+were preserved; 40,611 missing descriptions and 27,811 sets of Entrez links were
+filled, including 1,751 genes with multiple Entrez candidates. Missing values
+remain missing and are reported in the downloadable review. The cached
+supplemented annotation table is about 1.3 MB; all cache artifacts are ignored by
+Git, with no expression checkpoints.
+
+The existing GSE176031 SCE was reused through the real Shiny annotation and QC
+controllers. Hemoglobin evidence became available (five matching features),
+ribosomal classifications used the recorded OrgDb source and restored Entrez
+links, and the initial baseline remained 595 cells with identical retained
+counts. Default QC Preview and overview, joint-metric and ribosomal plot outputs
+passed. No QC Apply decision was made. Checksums of the source SCE, bundled
+exports and original GRCh37 reference were unchanged. The full regression suite
+passed 1,134 expectations with zero failures, errors or skips. Focused supplement
+tests also cover service failures without invalidating active QC, partial query
+rejection, build checks, multiple mappings, preserved conflicts and audit-file
+checksum validation.
 
 Validation on 2026-11-27: the full regression suite recorded 1,082 passing
 expectations with zero failures, errors or skips. After adding the explicit
