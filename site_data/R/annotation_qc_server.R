@@ -9,24 +9,64 @@ annotation_qc_server <- function(input,output,session,records,app_root=".",refer
   baseline_status <- shiny::reactiveVal("")
   busy <- shiny::reactiveVal(FALSE)
   revision <- 0L
+  previous_records <- previous_options <- NULL
+  configured <- FALSE
+  suggestions <- shiny::reactive({
+    x <- records();if (is.null(x)) return(NULL)
+    species <- input$typeOrganism;reference <- NULL
+    if (length(species)==1L && species %in% c("Homo sapiens","Mus musculus"))
+      reference <- tryCatch(load_gene_annotation_cache(species,app_root,include_ribosomal=FALSE,
+        reference_id=references$configuration()$reference_id,cache_dir=references$cache_dir),error=function(e) NULL)
+    lapply(x,suggest_feature_identifiers,reference=reference)
+  })
+  version_defaults <- shiny::reactive({
+    x <- records();if (is.null(x)) return(NULL)
+    formats <- lapply(x,suggest_feature_identifiers)
+    list(id=paste0("annotationStripVersion_",substr(digest::digest(vapply(formats,`[[`,character(1),"token"),algo="sha256"),1,16)),
+      value=any(vapply(formats,`[[`,logical(1),"strip_version_suggested")))
+  })
   options <- shiny::reactive({
     x <- records(); if (is.null(x)) return(NULL)
-    keys <- vapply(seq_along(x),function(i) {
-      value <- input[[paste0("annotationKey_",i)]]
-      # 10X column 1 declares primary IDs. For tables/RDS the user must choose;
-      # never guess species or identifier type from an ENSG prefix.
-      if (is.null(value) && identical(x[[i]]$source$format,"10X")) value <- "gene_id"
-      if (is.null(value) || length(value)!=1L) "" else value
-    },character(1))
-    names(keys) <- names(x)
-    c(list(organism=input$typeOrganism,keys=keys,strip_ensembl_version=isTRUE(input$annotationStripVersion)),references$configuration())
+    s <- suggestions()
+    decisions <- lapply(seq_along(x),function(i) resolve_feature_identifier_choice(s[[i]],input[[paste0("annotationKey_",i)]]))
+    keys <- stats::setNames(vapply(decisions,`[[`,character(1),"key"),names(x))
+    modes <- stats::setNames(vapply(decisions,`[[`,character(1),"mode"),names(x))
+    defaults <- version_defaults()
+    # Read this control only. Enumerating names(input) would subscribe to every
+    # new app input and clear prepared QC when unrelated panels are used.
+    suffix_value <- input[[defaults$id]]
+    strip <- if (!is.null(suffix_value)) isTRUE(suffix_value) else
+      if (!is.null(input$annotationStripVersion)) isTRUE(input$annotationStripVersion) else defaults$value
+    c(list(organism=input$typeOrganism,keys=keys,identifier_modes=modes,
+      strip_ensembl_version=strip,suffix_mode=if (identical(strip,defaults$value)) "suggested_default" else "user_override"),references$configuration())
   })
   output$annotationIdControls <- shiny::renderUI({
     x <- records(); if (is.null(x)) return(NULL)
-    shiny::tagList(lapply(seq_along(x),function(i) shiny::selectInput(paste0("annotationKey_",i),
-      paste("Feature identifiers:",names(x)[i]),
-      choices=c("Select identifier type"="","Gene symbols"="gene_name","Ensembl gene IDs"="gene_id"),
-      selected=if (identical(x[[i]]$source$format,"10X")) "gene_id" else "")))
+    s <- suggestions()
+    shiny::tagList(lapply(seq_along(x),function(i) {
+      choices <- c("Automatic detection"="auto","Gene symbols"=paste0("gene_name:",s[[i]]$token),
+        "Gene IDs (Ensembl/reference IDs)"=paste0("gene_id:",s[[i]]$token))
+      selected <- shiny::isolate(input[[paste0("annotationKey_",i)]])
+      if (length(selected)==1L && selected %in% c("gene_id","gene_name")) selected <- paste(selected,s[[i]]$token,sep=":")
+      if (length(selected)!=1L || !selected %in% choices) selected <- "auto"
+      shiny::tagList(shiny::selectInput(paste0("annotationKey_",i),paste("Feature identifiers:",names(x)[i]),
+        choices=choices,selected=selected),shiny::helpText(s[[i]]$reason))
+    }))
+  })
+  output$annotationVersionControl <- shiny::renderUI({
+    defaults <- version_defaults();if (is.null(defaults)) return(NULL)
+    shiny::checkboxInput(defaults$id,"Ignore Ensembl version suffixes for lookup only (allows annotation matching when Ensembl IDs contain a version suffix)",defaults$value)
+  })
+  output$annotationIdentifierSummary <- shiny::renderTable({
+    s <- suggestions();if (is.null(s)) return(NULL)
+    cfg <- options()
+    type_label <- function(key,missing) if (key=="gene_id") "Gene IDs" else if (key=="gene_name") "Gene symbols" else missing
+    do.call(rbind,lapply(names(s),function(n) data.frame(sample=n,suggested_type=type_label(s[[n]]$suggested_type,"Needs review"),
+      selected_type=type_label(cfg$keys[[n]],"Choose explicitly"),mode=cfg$identifier_modes[[n]],
+      features=s[[n]]$features,ensembl_ids=s[[n]]$ensembl_features,versioned_ids=s[[n]]$versioned_features,
+      exact_symbol_matches=s[[n]]$symbol_matches,suffix_lookup=if(cfg$keys[[n]]=="gene_id") {
+        if(cfg$strip_ensembl_version) "Enabled" else "Disabled"
+      } else if(cfg$keys[[n]]=="gene_name") "Not applicable" else "Choose identifier type")))
   })
   output$paramsAddMetadata <- shiny::renderText(status())
   output$initDataFilt <- shiny::renderText(baseline_status())
@@ -83,6 +123,11 @@ annotation_qc_server <- function(input,output,session,records,app_root=".",refer
     }))
   },rownames=FALSE)
   shiny::observeEvent(list(records(),options()),{
+    x <- records();cfg <- options()
+    # Initial browser bindings can report the same automatic defaults again.
+    # Preserve prepared results unless the actual import/configuration changes.
+    if (configured && identical(x,previous_records) && identical(cfg,previous_options)) return()
+    configured <<- TRUE;previous_records <<- x;previous_options <<- cfg
     revision <<- revision+1L
     prepared(NULL); baseline(NULL); busy(FALSE); baseline_status("")
     status(if (is.null(records())) "Read data before adding annotations." else "Annotation settings not yet applied. Choose species and identifier types, then add annotations.")
@@ -109,7 +154,10 @@ annotation_qc_server <- function(input,output,session,records,app_root=".",refer
           stop("Declare the counts genome build before using a downloaded reference.")
         result <- stats::setNames(lapply(names(x),function(n)
           prepare_sample_qc(x[[n]],reference,cfg$keys[[n]],cfg$strip_ensembl_version)),names(x))
-        for (n in names(result)) result[[n]]$config$data_genome_build <- if (nzchar(cfg$data_genome_build)) cfg$data_genome_build else "Unknown"
+        for (n in names(result)) {
+          result[[n]]$config$data_genome_build <- if (nzchar(cfg$data_genome_build)) cfg$data_genome_build else "Unknown"
+          result[[n]]$config$identifier_decision <- c(suggestions()[[n]],list(mode=cfg$identifier_modes[[n]],selected_type=cfg$keys[[n]],suffix_mode=cfg$suffix_mode))
+        }
         if (token!=revision) return(invisible(NULL))
         prepared(result)
         missing_hemoglobin <- any(vapply(result,function(p) identical(p$summary$hemoglobin_status,"missing_reference_definition"),logical(1)))
@@ -131,5 +179,6 @@ annotation_qc_server <- function(input,output,session,records,app_root=".",refer
     },error=function(e) {baseline(NULL);baseline_status(paste("Baseline construction stopped:",conditionMessage(e)))})
   },ignoreInit=TRUE,priority=10)
   list(prepared=shiny::reactive(prepared()),baseline=shiny::reactive(baseline()),
-    status=shiny::reactive(status()),baseline_status=shiny::reactive(baseline_status()))
+    status=shiny::reactive(status()),baseline_status=shiny::reactive(baseline_status()),
+    identifier_suggestions=suggestions,identifier_options=options,version_control_id=shiny::reactive(version_defaults()$id))
 }

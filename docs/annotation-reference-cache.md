@@ -179,10 +179,78 @@ invalidation path. No count matrix or expression checkpoint is saved by the
 maintenance operation. The primary resource, supplementary provider and
 separate installed OrgDb GO source remain visible in provenance.
 
-The suffix checkbox explains that a versioned ID such as
+## Automatic identifier suggestions and lookup-only suffix matching
+
+Each sample defaults to **Automatic detection** after reading data. Ensembl
+gene-ID format suggests gene-ID lookup, including IDs with a numeric version
+suffix. Otherwise exact matches in the selected local reference support a
+gene-symbol or reference-ID suggestion. Unknown rows remain unknown; there is
+no rule that every identifier without an ENS prefix must be a gene symbol.
+Mixed human/mouse prefixes, mixed gene IDs/symbols, numeric IDs and
+transcript/protein/exon IDs require an explicit lookup choice or corrected input.
+Species and counts genome build remain explicit user declarations.
+
+The identifier review table shows the suggested and selected type, automatic
+versus manual mode, feature/Ensembl/versioned counts and exact symbol matches.
+Exact symbol-match counts include names with multiple candidate genes; they
+indicate presence in the reference, not a unique gene mapping.
+A per-sample manual choice remains available. Browser choices are scoped to
+the current source-feature list, so a stale selection from a different upload
+cannot silently override the new suggestion. App-produced SCEs reuse their
+recorded source IDs rather than the internal names used to retain duplicate rows.
+The effective choice and its supporting evidence are recorded in the SCE QC
+configuration as `identifier_decision`.
+
+Version-suffix matching is enabled by default when versioned Ensembl gene IDs
+are detected in the imported samples. The checkbox remains visible and can be
+turned off. It only affects gene-ID lookup; symbol lookup remains exact. The
+suffix checkbox explains that a versioned ID such as
 `ENSG00000141510.18` can be matched using `ENSG00000141510`. It changes only
 lookup keys: source identifiers and counts remain unchanged, and no genome
-build conversion occurs.
+build conversion occurs. Initial browser bindings that acknowledge the same
+automatic defaults do not invalidate prepared QC. Actual import/reference/
+identifier/suffix changes still clear dependent results for preparation/review.
+Unrelated app inputs do not change the identifier configuration.
+
+## Unmapped, ambiguous and ribosomal feature review
+
+The complete **Download gene mapping** table retains every input feature row,
+source ID, mapped fields, candidate gene IDs and each group's TRUE/FALSE/NA
+classification. `unmapped` means no reference row matched the lookup key;
+`partial` means matching rows lack a usable gene ID or name; `ambiguous` means
+more than one gene ID or name matched. An ambiguous gene mapping can still
+support a particular group if all candidates agree on that group's membership.
+
+Users can check identifier type, species/build, suffix matching and reference,
+select the GRCh37 supplement where needed, download the full mapping and verify
+IDs against the original provider's feature table. A verified source correction
+can be re-uploaded. Gene symbols alone cannot always resolve a unique Ensembl
+gene; the app does not offer a per-feature override editor in this version.
+Keeping unresolved rows is supported: they remain in counts while annotation-
+dependent information may be incomplete. No first-candidate selection, gene
+merging or feature removal occurs automatically.
+
+The ribosomal summary counts **matrix feature rows**, including rows with zero
+counts, not cells or UMIs. For each group, `annotated_features` counts TRUE flags
+(supported group membership) and `unresolved_features` counts NA flags (unknown
+membership). FALSE flags are not annotated as members in the selected reference;
+they are not proof of biological nonmembership. Missing mappings, unavailable
+Entrez links/GO resources and disagreement among candidates can produce NA.
+
+| Group | Definition used by the app |
+| --- | --- |
+| `ribosomal_protein` | Protein-coding structural constituents of ribosome, supported by GO:0003735. |
+| `cytosolic_ribosomal_protein` | The supported structural proteins also assigned to cytosolic ribosome (GO:0022626). |
+| `mitochondrial_ribosomal_protein` | The supported structural proteins also assigned to mitochondrial ribosome (GO:0005761). |
+| `nuclear_rRNA` | rRNA-biotype features outside chromosome MT. |
+| `mitochondrial_rRNA` | Mt_rRNA biotype, or rRNA biotype on chromosome MT. |
+| `rRNA_pseudogene` | A biotype containing rRNA and pseudogene. |
+
+Parent/subgroup protein flags overlap and their counts must not be added.
+Protein and RNA groups have different evidence requirements, so their unresolved
+totals can differ. Zero supported features does not prove absence while some
+features remain unresolved. Users can filter the downloaded mapping by TRUE or
+NA in the relevant group column to inspect the exact features counted.
 
 After reading counts, **Sample names** provides one text field per imported
 sample and an **Apply sample names** button. Names must be nonempty and unique;
@@ -193,6 +261,23 @@ counts remain unchanged. The original sample label and rename history are
 retained in the baseline SCE's import provenance.
 
 ## Verification
+
+Automatic identifier validation on 2026-11-27: the full regression suite passed
+1,173 expectations with zero failures, errors or skips. Final focused identifier
+and annotation-controller tests passed 69 expectations, including an explicit
+mixed-identifier review/override case and the final review table. Tests verify
+automatic symbol/Ensembl recognition, suffix defaults and opt-out, preserved
+versioned count row names, stale-choice protection, unchanged preparation on
+initial browser bindings/unrelated inputs and correct feature-count semantics
+even for zero-count rows.
+
+The existing GSE176031 pilot was correctly detected as gene symbols without a
+manual identifier selection. Counts and the 595-cell baseline were unchanged,
+and hemoglobin metrics remained available. Its ribosomal summary matched the
+previous result. All 73 unresolved rows in each RNA group were unmapped; the
+359 unresolved ribosomal-protein rows comprised 73 unmapped, 14 ambiguous and
+272 mapped rows with unresolved protein classification. No expression checkpoint
+or QC filtering decision was saved; the source SCE checksum was unchanged.
 
 Validation of BioMart supplementation on 2026-11-27: the live XML query returned
 66,978 annotation rows with a completion stamp. The 63,677 parent reference rows

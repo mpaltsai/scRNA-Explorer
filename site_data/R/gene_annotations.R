@@ -104,6 +104,61 @@ load_ribosomal_reference <- function(organism) {
   }
 }
 
+# Reuse recorded source identifiers, including those retained by an earlier
+# lossless duplicate-row decision. Suggestions and actual lookup must inspect
+# the same IDs, not the repaired internal row names of an exported app SCE.
+.annotation_source_features <- function(record) {
+  original <- as.character(record$feature_identity$source_feature_id)
+  prior <- if (is.null(record$source_object)) NULL else S4Vectors::metadata(record$source_object)[["scrna_explorer_qc"]]
+  if (is.list(prior) && identical(prior$producer,"scRNA-Explorer") &&
+      identical(prior$schema_version,1L) && "qc_source_feature_id" %in% names(record$feature_data))
+    original <- as.character(record$feature_data$qc_source_feature_id)
+  original
+}
+
+# Format recognition is a suggestion about lookup keys, not a species/build
+# assignment or a biological mapping repair. Mixed/unsupported identifiers need
+# an explicit choice. Symbols require at least one exact match in the selected
+# local reference; unknown rows are retained and reported by normal annotation.
+suggest_feature_identifiers <- function(record,reference=NULL) {
+  ids <- .annotation_source_features(record)
+  gene <- grepl("^ENS[A-Z]*G[0-9]+(\\.[0-9]+)?$",ids)
+  versioned <- gene & grepl("\\.[0-9]+$",ids)
+  other <- grepl("^ENS[A-Z]*[TPE][0-9]+(\\.[0-9]+)?$",ids) | grepl("^[0-9]+$",ids)
+  human <- any(grepl("^ENSG[0-9]",ids));mouse <- any(grepl("^ENSMUSG[0-9]",ids))
+  symbols <- if (is.null(reference)) rep(FALSE,length(ids)) else ids %in% reference$table$gene_name
+  ref_ids <- if (is.null(reference)) rep(FALSE,length(ids)) else ids %in% reference$table$gene_id
+  result <- list(suggested_type="",status="needs_review",reason="No supported identifier type established; choose the type explicitly.",
+    features=length(ids),ensembl_features=sum(gene),versioned_features=sum(versioned),
+    symbol_matches=sum(symbols),reference_id_matches=sum(ref_ids),
+    strip_version_suggested=any(versioned),token=substr(digest::digest(ids,algo="sha256"),1,16))
+  if (length(ids) && all(gene) && !(human && mouse)) {
+    result$suggested_type <- "gene_id";result$status <- "suggested"
+    result$reason <- "Ensembl gene-ID format detected. Confirm species and genome build separately."
+  } else if (any(gene) || any(other)) {
+    result$reason <- if (human && mouse) "Human and mouse Ensembl prefixes are mixed; review the input before choosing a lookup type." else
+      "Mixed gene IDs, numeric IDs or transcript/protein/exon IDs need review; choose a lookup type explicitly or correct the input."
+  } else if (any(symbols) && !any(ref_ids & !symbols)) {
+    result$suggested_type <- "gene_name";result$status <- "suggested"
+    result$reason <- "Gene symbols suggested from exact matches in the selected local reference; unmatched features remain for review."
+  } else if (any(ref_ids) && !any(symbols)) {
+    result$suggested_type <- "gene_id";result$status <- "suggested"
+    result$reason <- "Gene IDs suggested from exact matches in the selected local reference."
+  }
+  result
+}
+
+# Browser choices carry a feature-list token. A manual choice left over from a
+# different upload cannot silently control a new feature list. Plain key values
+# remain accepted for existing programmatic callers/tests of this controller.
+resolve_feature_identifier_choice <- function(suggestion,value=NULL) {
+  if (length(value)==1L && !is.na(value)) {
+    for (key in c("gene_id","gene_name"))
+      if (value %in% c(key,paste(key,suggestion$token,sep=":"))) return(list(key=key,mode="manual"))
+  }
+  list(key=suggestion$suggested_type,mode="automatic")
+}
+
 # Return small annotation/metric tables, not another expression object. Lookups
 # use source IDs even when the user retained duplicated rows with new internal IDs.
 prepare_sample_qc <- function(record, reference, feature_id_type, strip_ensembl_version=FALSE) {
@@ -122,14 +177,7 @@ prepare_sample_qc <- function(record, reference, feature_id_type, strip_ensembl_
     sub("^(ENS[A-Z]*G[0-9]+)\\.[0-9]+$","\\1",x)
   } else x
   keys <- normalise(as.character(a[[feature_id_type]]))
-  original <- record$feature_identity$source_feature_id
-  # An app-generated SCE may already carry a recorded duplicate-ID resolution.
-  # Its original lookup IDs remain annotations, while count row names stay unique.
-  prior <- if (is.null(record$source_object)) NULL else S4Vectors::metadata(record$source_object)[["scrna_explorer_qc"]]
-  if (is.list(prior) && identical(prior$producer,"scRNA-Explorer") &&
-      identical(prior$schema_version,1L) && "qc_source_feature_id" %in% names(record$feature_data)) {
-    original <- as.character(record$feature_data$qc_source_feature_id)
-  }
+  original <- .annotation_source_features(record)
   lookup <- normalise(original)
   valid <- !is.na(keys) & nzchar(keys)
   groups <- split(which(valid),keys[valid])
