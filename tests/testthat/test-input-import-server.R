@@ -101,13 +101,23 @@ testthat::test_that("the actual app server retains imported metadata and invalid
   withr::local_dir(file.path("..","..","site_data"))
   app_server <- source("server.R",local=env)$value
   shiny::testServer(app_server,{
-    session$setInputs(testData="2",typeData="3",startQC=0)
+    session$setInputs(testData="2",typeData="3",startQC=0,applySampleNames=0)
     session$setInputs(rdsFile=data.frame(name="sce.rds",datapath=p))
     session$setInputs(startQC=1)
     session$flushReact()
     testthat::expect_identical(my_react_vals$d_to_metadata$sample,f$counts)
     testthat::expect_identical(my_react_vals$import_records$sample$source_object,object)
+    stable_ids <- my_react_vals$import_records$sample$cell_identity
     my_react_vals$filt_samples_list <- list(sample="old result")
+    my_react_vals$loaded.dataSO.combined.no.cluster <- "old Seurat result"
+    session$setInputs(importSampleName_1="Patient 1",applySampleNames=1)
+    testthat::expect_identical(names(my_react_vals$d_to_metadata),"Patient 1")
+    testthat::expect_identical(my_react_vals$import_records[["Patient 1"]]$cell_identity,stable_ids)
+    testthat::expect_identical(my_react_vals$import_records[["Patient 1"]]$source_object,object)
+    testthat::expect_identical(my_react_vals$import_records[["Patient 1"]]$source$upload_names$rdsFile,"sce.rds")
+    testthat::expect_null(my_react_vals$filt_samples_list)
+    testthat::expect_null(my_react_vals$loaded.dataSO.combined.no.cluster)
+    my_react_vals$filt_samples_list <- list("Patient 1"="old result")
     my_react_vals$loaded.dataSO.combined.no.cluster <- "old Seurat result"
     session$setInputs(rdsFile=data.frame(name="missing.rds",datapath=file.path(f$root,"missing")))
     session$setInputs(startQC=2)

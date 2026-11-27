@@ -29,6 +29,52 @@ annotation_genome_build <- function(x) {
   build
 }
 
+# Older human assemblies are available as GTF-derived GRanges in AnnotationHub,
+# not necessarily as EnsDb databases. Accept gene annotations, never arbitrary
+# GRanges such as peaks. The downloaded object is checked again before export.
+annotation_reference_kind <- function(rows) {
+  kind <- rep(NA_character_,nrow(rows))
+  if (!all(c("dataprovider","rdataclass","title") %in% names(rows))) return(kind)
+  ensembl <- !is.na(rows$dataprovider) & rows$dataprovider=="Ensembl"
+  kind[which(ensembl & rows$rdataclass=="EnsDb")] <- "EnsDb"
+  gtf <- ensembl & rows$rdataclass=="GRanges" &
+    grepl("\\.[0-9]+\\.gtf(\\.gz)?$",rows$title,ignore.case=TRUE)
+  if ("sourcetype" %in% names(rows)) gtf <- gtf & !is.na(rows$sourcetype) & rows$sourcetype=="GTF"
+  kind[which(gtf)] <- "GTF"
+  kind
+}
+
+# Export unique gene-annotation combinations, not exon/transcript counts. Keep
+# conflicting mappings for the existing ambiguity review rather than choosing
+# the first gene name. GTFs lack Entrez links and descriptions: record these as
+# unavailable; do not fabricate them from a newer, different annotation release.
+annotation_gtf_table <- function(resource,candidate) {
+  if (!inherits(resource,"GRanges")) stop("Downloaded GTF annotation is not a GRanges.")
+  if (!identical(annotation_reference_kind(candidate),"GTF")) stop("Select an Ensembl GTF annotation.")
+  columns <- S4Vectors::mcols(resource)
+  if (!all(c("gene_id","gene_name","gene_biotype") %in% names(columns)))
+    stop("GTF annotation lacks gene_id, gene_name or gene_biotype.")
+  object_builds <- unique(as.character(GenomeInfoDb::genome(resource)))
+  object_builds <- object_builds[!is.na(object_builds) & nzchar(object_builds)]
+  build <- .annotation_target(candidate$species[[1]],candidate$genome[[1]])
+  if (length(object_builds) && any(is.na(annotation_genome_build(object_builds)) |
+      annotation_genome_build(object_builds)!=build)) stop("GTF sequence genome differs from the checked catalogue build.")
+  table <- unique(data.frame(gene_id=as.character(columns$gene_id),gene_name=as.character(columns$gene_name),
+    gene_biotype=as.character(columns$gene_biotype),seq_name=as.character(GenomicRanges::seqnames(resource)),
+    stringsAsFactors=FALSE))
+  table <- table[!is.na(table$gene_id) & nzchar(table$gene_id),,drop=FALSE]
+  if (!nrow(table)) stop("GTF annotation contains no gene identifiers.")
+  table <- table[order(table$gene_id,table$gene_name,table$gene_biotype,table$seq_name),,drop=FALSE]
+  rownames(table) <- NULL
+  table$description <- NA_character_
+  table$entrezid <- NA_character_
+  release <- sub("^.*\\.([0-9]+)\\.gtf(\\.gz)?$","\\1",candidate$title[[1]],ignore.case=TRUE)
+  list(table=table,species=candidate$species[[1]],genome_build=build,annotation_release=release,
+    source_metadata=list(resource_class="GRanges",catalogue_candidate=candidate,sequence_genomes=object_builds,
+      build_evidence=if (length(object_builds)) "Catalogue and sequence genome agree" else "Catalogue build; sequence genome unavailable",
+      unavailable_fields=c("description","entrezid"),export="Distinct gene-level annotation combinations; conflicts retained"))
+}
+
 bundled_annotation_provenance <- function(organism,app_root=".") {
   .annotation_species(organism)
   files <- c("Homo sapiens"="annotations_hsap.Rda","Mus musculus"="annotations_mmus.Rda")
@@ -142,10 +188,9 @@ check_annotation_updates <- function(organism,genome_build,app_root=".",cache_di
     if (!is.data.frame(rows) || !all(required %in% names(rows)) ||
         length(catalog$snapshot_date)!=1L || is.na(as.Date(catalog$snapshot_date))) stop("Incomplete AnnotationHub catalogue metadata.")
     compatible <- !is.na(rows$species) & rows$species==organism &
-      !is.na(rows$rdataclass) & rows$rdataclass=="EnsDb" &
-      !is.na(rows$dataprovider) & rows$dataprovider=="Ensembl" &
+      !is.na(annotation_reference_kind(rows)) &
       !is.na(annotation_genome_build(rows$genome)) & annotation_genome_build(rows$genome)==build
-    selected <- rows[which(compatible),intersect(c(required,"rdatadateadded","description","sourceurl","sourcesize"),names(rows)),drop=FALSE]
+    selected <- rows[which(compatible),intersect(c(required,"rdatadateadded","description","sourceurl","sourcesize","sourcetype","rdatapath"),names(rows)),drop=FALSE]
     if (anyNA(selected$resource_id) || any(!grepl("^AH[0-9]+$",selected$resource_id)) || anyDuplicated(selected$resource_id))
       stop("Invalid or duplicated AnnotationHub resource identifiers.")
     selected$genome <- rep(build,nrow(selected))
@@ -168,19 +213,23 @@ check_annotation_updates <- function(organism,genome_build,app_root=".",cache_di
 
 # Retrieve exactly the chosen resource in the catalogue snapshot. Selecting a
 # new catalogue entry is not enough: resource metadata must independently agree.
-annotationhub_fetch <- function(candidate,snapshot_date,cache_dir) {
-  needed <- c("AnnotationHub","ensembldb","AnnotationDbi")
+annotationhub_fetch <- function(candidate,snapshot_date,cache_dir,hub=NULL) {
+  needed <- c("AnnotationHub","ensembldb","AnnotationDbi","GenomicRanges","GenomeInfoDb")
   if (!all(vapply(needed,requireNamespace,logical(1),quietly=TRUE))) stop("Existing AnnotationHub/ensembldb/AnnotationDbi installations required; no packages installed.")
-  # Online access is explicit here; ordinary reference loading stays offline.
-  hub <- AnnotationHub::AnnotationHub(cache=file.path(cache_dir,"hub"),ask=FALSE,localHub=FALSE)
-  AnnotationHub::snapshotDate(hub) <- as.Date(snapshot_date)
+  # Ordinary reference loading stays offline. A caller may supply an offline
+  # AnnotationHub to reuse an already cached resource without downloading it.
+  if (is.null(hub)) hub <- AnnotationHub::AnnotationHub(cache=file.path(cache_dir,"hub"),ask=FALSE,localHub=FALSE)
+  if (!identical(as.character(AnnotationHub::snapshotDate(hub)),as.character(as.Date(snapshot_date))))
+    AnnotationHub::snapshotDate(hub) <- as.character(as.Date(snapshot_date))
   id <- candidate$resource_id
   if (!id %in% names(hub)) stop("Chosen resource no longer available in the checked snapshot.")
   catalog_row <- as.data.frame(S4Vectors::mcols(hub[id]),stringsAsFactors=FALSE)
   if (!identical(as.character(catalog_row$species),candidate$species) ||
       !identical(annotation_genome_build(catalog_row$genome),annotation_genome_build(candidate$genome)) ||
-      !identical(as.character(catalog_row$rdataclass),"EnsDb")) stop("Resource catalogue metadata changed; check again before downloading.")
+      !identical(annotation_reference_kind(catalog_row),annotation_reference_kind(candidate)) ||
+      !identical(as.character(catalog_row$title),candidate$title)) stop("Resource catalogue metadata changed; check again before downloading.")
   resource <- hub[[id]]
+  if (identical(annotation_reference_kind(candidate),"GTF")) return(annotation_gtf_table(resource,candidate))
   if (!inherits(resource,"EnsDb")) stop("Downloaded reference is not an EnsDb.")
   metadata <- AnnotationDbi::metadata(resource)
   on.exit(try(DBI::dbDisconnect(AnnotationDbi::dbconn(resource)),silent=TRUE),add=TRUE)
@@ -196,8 +245,8 @@ download_annotation_reference <- function(candidate,snapshot_date,reason,app_roo
   if (!is.data.frame(candidate) || nrow(candidate)!=1L || !all(c("resource_id","species","genome","title","rdataclass","dataprovider") %in% names(candidate)))
     stop("Select exactly one checked catalogue candidate.")
   id <- candidate$resource_id[[1]]
-  if (is.na(id) || !grepl("^AH[0-9]+$",id) || !identical(candidate$rdataclass[[1]],"EnsDb") ||
-      !identical(candidate$dataprovider[[1]],"Ensembl")) stop("Select an Ensembl EnsDb resource.")
+  kind <- annotation_reference_kind(candidate)
+  if (is.na(id) || !grepl("^AH[0-9]+$",id) || is.na(kind)) stop("Select an Ensembl EnsDb or GTF gene-annotation resource.")
   build <- .annotation_target(candidate$species[[1]],candidate$genome[[1]])
   if (length(snapshot_date)!=1L || is.na(as.Date(snapshot_date))) stop("Record the checked snapshot date.")
   if (length(reason)!=1L || is.na(reason) || !nzchar(trimws(reason))) stop("Provide a reason before downloading a reference.")
@@ -222,13 +271,13 @@ download_annotation_reference <- function(candidate,snapshot_date,reason,app_roo
   staging <- tempfile("pending-",tmpdir=root); dir.create(staging)
   on.exit(unlink(staging,recursive=TRUE),add=TRUE) # only this function's unfinished files
   path <- file.path(staging,"reference.rds"); saveRDS(table,path)
-  provenance <- list(source="AnnotationHub Ensembl EnsDb",reference_id=reference_id,resource_id=id,
+  provenance <- list(source=paste("AnnotationHub Ensembl",kind),reference_id=reference_id,resource_id=id,
     snapshot_date=as.character(as.Date(snapshot_date)),annotation_release=payload$annotation_release,
     genome_build=build,md5=unname(tools::md5sum(path)),path=file.path(destination,"reference.rds"),
     retrieved_at=format(Sys.time(),tz="UTC",usetz=TRUE),reason=trimws(reason),
     source_metadata=payload$source_metadata,catalogue_candidate=candidate)
   entry <- list(schema_version=1L,reference_id=reference_id,species=payload$species,table_hash=table_hash,
-    label=paste(id,"Ensembl",payload$annotation_release,build,"snapshot",snapshot_date),provenance=provenance)
+    label=paste(build,"— Ensembl",payload$annotation_release,paste0("(",id,", ",kind,")"),"snapshot",snapshot_date),provenance=provenance)
   saveRDS(entry,file.path(staging,"manifest.rds"))
   if (!file.rename(staging,destination)) stop("Cannot save versioned reference; existing references unchanged.")
   .annotation_read_entry(destination)

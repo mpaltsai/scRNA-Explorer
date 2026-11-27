@@ -49,6 +49,14 @@ input_import_server <- function(input,output,session,request) {
     do.call(rbind,lapply(x,function(r) data.frame(sample=r$sample_id,features=nrow(r$counts),
       cells=ncol(r$counts),generated_cell_ids=sum(r$cell_identity$generated),status=r$status)))
   },rownames=FALSE)
+  output$importSampleNameControls <- shiny::renderUI({
+    x <- records(); if (is.null(x)) return(NULL)
+    shiny::tagList(shiny::h5("Sample names"),
+      shiny::helpText("Name each uploaded sample, then apply the names before adding gene annotations. Renaming later clears dependent annotation, QC and downstream results; original counts and cell IDs are preserved."),
+      lapply(seq_along(x),function(i) shiny::textInput(paste0("importSampleName_",i),
+        paste("Sample",i,"(imported as",x[[i]]$source$sample_id_at_import,")"),value=x[[i]]$sample_id)),
+      shiny::actionButton("applySampleNames","Apply sample names"))
+  })
   output$importDuplicateTable <- shiny::renderTable({
     x <- records(); if (is.null(x)) return(NULL)
     pending <- x[vapply(x,function(r) identical(r$status,"needs_feature_decision"),logical(1))]
@@ -110,6 +118,19 @@ input_import_server <- function(input,output,session,request) {
       records(x)
       status(if (identical(x[[sample]]$status,"cancelled")) "Import cancelled. Upload corrected data and read again." else if (is.null(ready())) "Decision recorded; other samples still need review." else "Import decisions recorded. Reading data completed; all samples are ready.")
     },error=function(e) status(paste("Decision not applied:",conditionMessage(e))))
+  },ignoreInit=TRUE)
+  shiny::observeEvent(input$applySampleNames,{
+    tryCatch({
+      x <- records(); if (is.null(x)) stop("Read data before naming samples.")
+      labels <- vapply(seq_along(x),function(i) {
+        label <- input[[paste0("importSampleName_",i)]]
+        if (is.null(label) || length(label)!=1L) "" else label
+      },character(1))
+      renamed <- rename_import_samples(x,labels)
+      if (!identical(renamed,x)) records(renamed)
+      status(paste("Sample names applied.",if (is.null(ready())) "Review pending import decisions." else
+        "Ready for gene annotations. Original cell IDs and counts are unchanged."))
+    },error=function(e) status(paste("Sample names not applied:",conditionMessage(e))))
   },ignoreInit=TRUE)
   list(records=shiny::reactive(records()),ready=ready,status=shiny::reactive(status()),
     busy=shiny::reactive(busy()),decisions=decisions,directory=directory)

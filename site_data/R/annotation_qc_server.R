@@ -110,7 +110,9 @@ annotation_qc_server <- function(input,output,session,records,app_root=".",refer
         for (n in names(result)) result[[n]]$config$data_genome_build <- if (nzchar(cfg$data_genome_build)) cfg$data_genome_build else "Unknown"
         if (token!=revision) return(invisible(NULL))
         prepared(result)
-        status("Annotations and QC metrics prepared. Review mapping coverage and reference provenance, then run Minimal filtering (UMIs >= 100). Original feature IDs and counts are preserved; unmapped/ambiguous features were not removed.")
+        missing_hemoglobin <- any(vapply(result,function(p) identical(p$summary$hemoglobin_status,"missing_reference_definition"),logical(1)))
+        status(paste("Annotations and QC metrics prepared. Review mapping coverage and reference provenance, then run Minimal filtering (UMIs >= 100). Original feature IDs and counts are preserved; unmapped/ambiguous features were not removed.",
+          if (missing_hemoglobin) "Hemoglobin QC is unavailable: this reference lacks the description-based gene definition. QC filtering remains blocked until that evidence is supplied; unavailable values are not zero contamination." else ""))
       },error=function(e) {if(token==revision) status(paste("Annotation stopped:",conditionMessage(e)))})
       if (token==revision) busy(FALSE)
     }),once=TRUE)

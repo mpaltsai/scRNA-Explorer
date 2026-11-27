@@ -86,7 +86,8 @@ tab1<-     tabPanel("Data input/preprocessing",
                         
                         helpText("Gene annotations load from a local cache. Checking for updates or downloading a separate reference does not change prepared results."),
                         uiOutput("annotationIdControls"),
-                        checkboxInput("annotationStripVersion", "Ignore Ensembl version suffixes for lookup only", FALSE),
+                        checkboxInput("annotationStripVersion", "Ignore Ensembl version suffixes for lookup only (allows annotation matching when Ensembl IDs contain a version suffix)", FALSE),
+                        helpText("For example, ENSG00000141510.18 is matched using ENSG00000141510. Original feature IDs and counts are preserved; this does not convert genome builds."),
                         
                         #set organism parameteres
                         radioButtons(inputId= "typeOrganism", label = "Which organism comes your data from?",
@@ -124,6 +125,7 @@ tab1<-     tabPanel("Data input/preprocessing",
                       mainPanel(
                         h4("Import review"),
                         tableOutput("importSummary"),
+                        uiOutput("importSampleNameControls"),
                         tableOutput("importDuplicateTable"),
                         uiOutput("importDecisionControls"),
                         tableOutput("importDecisionHistory"),

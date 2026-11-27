@@ -216,7 +216,7 @@ make_baseline_sce <- function(record, prepared) {
   md$scrna_explorer_qc <- list(producer="scRNA-Explorer",schema_version=1L,config=prepared$config,
     previous_qc=md[["scrna_explorer_qc"]],
     mapping_summary=prepared$summary,
-    import_source=record$source,import_decisions=record$decisions,
+    import_source=record$source,import_decisions=record$decisions,import_sample_names=record$sample_name_history,
     legacy_field_conflicts=prepared$legacy_field_conflicts,
     initial_filter=list(rule="nUMI >= 100",input_cells=ncol(object),retained_cells=sum(keep),
       excluded_cells=colnames(object)[!keep]))

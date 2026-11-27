@@ -23,8 +23,9 @@ annotation_reference_server <- function(input,output,session,app_root=".",cache_
     entries <- api$list_annotation_references(organism,app_root,cache_dir)
     selected <- shiny::isolate(input$annotationReference)
     if (is.null(selected) || !selected %in% names(entries)) selected <- "bundled"
-    shiny::selectInput("annotationReference","Annotation reference",
-      choices=stats::setNames(names(entries),vapply(entries,`[[`,character(1),"label")),selected=selected)
+    shiny::tagList(shiny::selectInput("annotationReference","Annotation reference",
+      choices=stats::setNames(names(entries),vapply(entries,`[[`,character(1),"label")),selected=selected),
+      shiny::helpText("Choose a cached reference matching the counts' genome build. To add another build, choose it above and use Annotation reference maintenance. The bundled export has an unverified build."))
   })
   output$annotationGenomeControls <- shiny::renderUI({
     organism <- input$typeOrganism
@@ -40,7 +41,7 @@ annotation_reference_server <- function(input,output,session,app_root=".",cache_
   })
   output$annotationCandidates <- shiny::renderTable({
     state <- checked(); if (is.null(state) || is.null(state$candidates)) return(NULL)
-    state$candidates[,intersect(c("resource_id","title","species","genome","rdatadateadded"),names(state$candidates)),drop=FALSE]
+    state$candidates[,intersect(c("resource_id","title","species","genome","rdataclass","rdatadateadded"),names(state$candidates)),drop=FALSE]
   },rownames=FALSE)
   output$annotationDownloadControls <- shiny::renderUI({
     state <- checked()
@@ -51,6 +52,7 @@ annotation_reference_server <- function(input,output,session,app_root=".",cache_
         choices=c("Select a resource"="",stats::setNames(d$resource_id,paste(d$resource_id,d$title))),selected=""),
       shiny::textInput("annotationUpdateReason","Reason for adding this reference"),
       shiny::checkboxInput("annotationDownloadConsent","Download this resource into the project cache (may require hundreds of MB)",FALSE),
+      shiny::helpText("GTF references provide gene IDs, names and biotypes. Descriptions and Entrez links are unavailable: the current description-based hemoglobin QC cannot be calculated, and GO/Entrez-based ribosomal protein flags may remain unresolved. QC filtering requires the missing hemoglobin evidence; RNA biotypes are still labelled."),
       shiny::actionButton("annotationDownload","Download as a separate reference"))
   })
   shiny::observeEvent(target(),{
@@ -83,7 +85,7 @@ annotation_reference_server <- function(input,output,session,app_root=".",cache_
         message(if (!is.null(state$error)) paste("Catalogue check failed:",state$error,
           "Previous successful results, if shown, are stale. No reference or QC result changed.") else
           paste("Checked snapshot",state$snapshot_date,"on",state$last_success,"—",nrow(state$candidates),
-            "compatible Ensembl EnsDb candidates. The bundled export's release is unknown, so these are candidates for review, not verified newer versions. No reference selected or QC result changed."))
+            "compatible Ensembl gene-annotation candidates (EnsDb or GTF). The bundled export's release is unknown, so these are candidates for review, not verified newer versions. No reference selected or QC result changed."))
       },error=function(e) message(paste("Catalogue check stopped:",conditionMessage(e))))
       if (token==revision) busy(FALSE)
     }),once=TRUE)

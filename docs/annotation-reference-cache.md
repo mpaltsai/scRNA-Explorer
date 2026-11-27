@@ -17,8 +17,9 @@ In the development app's input tab:
 3. Expand **Annotation reference maintenance**, then **Check for reference
    updates**. Only this action checks online. It may download AnnotationHub's
    catalogue database; it does not download an EnsDb annotation resource.
-4. Review the candidates. Only Ensembl EnsDb resources for the selected species
-   and known genome build are listed. `hg19`/`GRCh37`, `hg38`/`GRCh38`,
+4. Review the candidates. Only Ensembl EnsDb or GTF-derived gene annotations
+   for the selected species and known genome build are listed.
+   `hg19`/`GRCh37`, `hg38`/`GRCh38`,
    `mm10`/`GRCm38` and `mm39`/`GRCm39` are treated as build-name aliases.
    This does not perform coordinate conversion or guarantee matching annotation
    releases, gene models or identifier coverage. No compatible candidate is a
@@ -26,8 +27,13 @@ In the development app's input tab:
 5. Select a candidate, give a reason and explicitly confirm its download.
    A resource may require hundreds of MB. It is saved separately, never over the
    bundled export. Its own metadata must agree with the candidate's species and
-   build. Release, resource ID, snapshot, source metadata, retrieval time, reason,
-   table hash and file checksum are recorded.
+   build. For EnsDb resources the database metadata are checked independently.
+   GTF-derived GRanges must contain gene IDs, gene names and gene biotypes;
+   any sequence genome recorded in the object must match the catalogue build.
+   When the sequence genome is absent, the provenance explicitly records that
+   the build is supported by catalogue metadata only. Release, resource ID,
+   snapshot, source metadata, retrieval time, reason, table hash and file
+   checksum are recorded.
 6. Downloading does not select a reference or change prepared QC. To use it,
    choose it under **Annotation reference**, then **Add gene annotations** and
    review the mapping/QC again. A downloaded reference requires a declared,
@@ -86,7 +92,64 @@ The standalone `load_cell_cycle_annotation()` accepts the same `reference_id`
 and `cache_dir`, so a selected gene annotation can be reused for marker mapping.
 This does not change the independently chosen S/G2M marker reference.
 
+## Human genome builds and suffix matching
+
+The locally cached AnnotationHub catalogue inspected on 2026-11-27 identifies
+`AH119325` as the human GRCh38 Ensembl 113 EnsDb and `AH10684` as human GRCh37
+Ensembl 75 GTF-derived GRanges. The latter is not an EnsDb; restricting the
+catalogue to EnsDb alone would omit it. These are build-specific references,
+not a claim to reproduce the exact annotation used to generate uploaded counts.
+Match the original Ensembl release too when it is known.
+
+The GRCh38 resource already present in the user's AnnotationHub cache was
+exported offline into this worktree's versioned reference cache (about 2 MB).
+Its snapshot is `2026-11-06`. The large SQLite database was reused, not copied
+or downloaded again. With the user's explicit approval, `AH10684` was then
+downloaded into the existing AnnotationHub cache and exported into the project
+cache (about 0.6 MB; checked snapshot `2026-04-23`). Its GRanges sequence genome
+explicitly records GRCh37 and agrees with the catalogue. These ignored local
+exports are not included in Git; other deployments must populate their own
+writable reference cache through the
+explicit maintenance controls and download consent.
+
+GTF export removes repeated exon/transcript annotation combinations, retaining
+conflicting gene names for the existing ambiguity review. It does not aggregate
+expression rows. GTF descriptions and Entrez IDs are unavailable and remain NA.
+Consequently GO/Entrez-based ribosomal protein flags may be unresolved; RNA
+biotypes remain available. The existing hemoglobin definition uses descriptions
+starting with “hemoglobin”, so GTF-based hemoglobin metrics are unavailable
+(NA, not zero). The annotation status warns about this, and existing QC filtering
+continues to block on missing evidence. A richer matched reference or an explicit
+future decision about an alternative hemoglobin definition is needed before
+filtering with this GTF. A different source must not silently supply missing
+annotations under the GTF release's provenance.
+
+The suffix checkbox explains that a versioned ID such as
+`ENSG00000141510.18` can be matched using `ENSG00000141510`. It changes only
+lookup keys: source identifiers and counts remain unchanged, and no genome
+build conversion occurs.
+
+After reading counts, **Sample names** provides one text field per imported
+sample and an **Apply sample names** button. Names must be nonempty and unique;
+path separators and control characters are rejected. Draft text does not change
+analysis state. Applying a changed name clears dependent preparation/QC through
+the existing import invalidation path. Cell IDs, source filenames, metadata and
+counts remain unchanged. The original sample label and rename history are
+retained in the baseline SCE's import provenance.
+
 ## Verification
+
+Validation on 2026-11-27: the full regression suite recorded 1,082 passing
+expectations with zero failures, errors or skips. After adding the explicit
+missing-hemoglobin message and its tests, the final focused annotation suite
+passed 127 expectations, also with zero failures, errors or skips. Tests cover
+both reference formats, build separation, conflict-preserving GTF export,
+unavailable hemoglobin evidence, atomic sample renaming, stable cell IDs and
+clearing stale annotation/QC/Seurat results through the actual app server.
+Read-only preparation of the existing GSE176031 SCE loaded both real references,
+preserved UMI totals and the 595-cell initial baseline membership, and confirmed
+both reference choices in the Shiny control. The source SCE and bundled exports
+were unchanged; no QC filtering decision or expression checkpoint was saved.
 
 The reference tests inject catalogue and resource retrieval functions. They
 exercise build/species eligibility, monthly boundaries, failures, download

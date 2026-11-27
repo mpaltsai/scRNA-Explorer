@@ -33,11 +33,33 @@ new_count_import <- function(counts, sample_id="sample", feature_data=NULL, cell
   counts <- methods::as(methods::as(counts,"CsparseMatrix"),"dgCMatrix")
   colnames(counts) <- cells
   duplicates <- duplicated(features) | duplicated(features,fromLast=TRUE)
+  source$sample_id_at_import <- sample_id
   list(counts=counts,sample_id=sample_id,feature_data=feature_data,cell_data=cell_data,
     feature_identity=data.frame(source_row=seq_along(features),source_feature_id=features,
       internal_feature_id=features,duplicate_primary_id=duplicates),cell_identity=identity,
-    source_object=object,source=source,decisions=list(),
+    source_object=object,source=source,decisions=list(),sample_name_history=list(),
     status=if (any(duplicates)) "needs_feature_decision" else "ready")
+}
+
+# Sample names are user-facing labels. Renaming must not reconstruct cell IDs,
+# change source metadata or alter counts. Apply the complete set atomically so
+# duplicate/empty labels cannot create ambiguous per-sample QC state.
+rename_import_samples <- function(records,sample_names) {
+  if (!length(records) || !is.character(sample_names) || length(sample_names)!=length(records) || anyNA(sample_names))
+    stop("Provide a name for every imported sample.")
+  sample_names <- trimws(sample_names)
+  if (any(!nzchar(sample_names))) stop("Sample names cannot be empty.")
+  if (anyDuplicated(sample_names)) stop("Sample names must be unique.")
+  if (any(sample_names %in% c(".","..")) || any(grepl("[[:cntrl:]/\\\\]",sample_names)))
+    stop("Sample names cannot contain path separators or control characters.")
+  for (i in seq_along(records)) {
+    old <- records[[i]]$sample_id
+    if (identical(old,sample_names[[i]])) next
+    records[[i]]$sample_name_history <- c(records[[i]]$sample_name_history,
+      list(list(from=old,to=sample_names[[i]],time=format(Sys.time(),tz="UTC",usetz=TRUE))))
+    records[[i]]$sample_id <- sample_names[[i]]
+  }
+  stats::setNames(records,sample_names)
 }
 
 # Plain text may be gzipped even when Shiny's temporary filename has no suffix.
@@ -177,5 +199,9 @@ read_app_input <- function(input, session_directory, app_root=".") {
     read_count_10x(upload_path(input$mtxInput,"a count matrix"),
       upload_path(input$genes10XInput,"a feature table"),input$barcodes10XInput$datapath)
   } else stop("Select a supported input format.")
+  # Shiny datapath is a temporary filename; retain the uploaded filename too.
+  upload_fields <- switch(type,"1"="csvFile","2"=c("mtxInput","genes10XInput","barcodes10XInput"),"3"="rdsFile")
+  record$source$upload_names <- lapply(upload_fields,function(field) input[[field]]$name)
+  names(record$source$upload_names) <- upload_fields
   list(sample=record)
 }
